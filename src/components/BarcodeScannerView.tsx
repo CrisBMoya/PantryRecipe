@@ -27,11 +27,12 @@ export function BarcodeScannerView({
 }: BarcodeScannerViewProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const {
+    isScanning,
     scannedResult,
     verifyingProgress,
     requiredReads,
     handleBarcodeScanned,
-    resetScanner,
+    startScanning,
   } = useBarcodeScanner(config, onScanned);
 
   const barcodeTypes = config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES;
@@ -70,7 +71,9 @@ export function BarcodeScannerView({
         style={styles.camera}
         facing="back"
         autofocus="on"
-        onBarcodeScanned={scannedResult ? undefined : handleBarcodeScanned}
+        onBarcodeScanned={
+          isScanning && !scannedResult ? handleBarcodeScanned : undefined
+        }
         barcodeScannerSettings={{
           barcodeTypes,
         }}
@@ -82,9 +85,11 @@ export function BarcodeScannerView({
           <Text style={styles.headerSubtitle}>
             {scannedResult
               ? 'Barcode verified!'
-              : verifyingProgress > 0
-                ? `Verifying barcode (${verifyingProgress}/${requiredReads})...`
-                : 'Hold steady over a barcode'}
+              : !isScanning
+                ? 'Press the button below to scan a barcode'
+                : verifyingProgress > 0
+                  ? `Verifying barcode (${verifyingProgress}/${requiredReads})...`
+                  : 'Hold steady over a barcode'}
           </Text>
         </View>
 
@@ -92,7 +97,8 @@ export function BarcodeScannerView({
           <View
             style={[
               styles.reticle,
-              verifyingProgress > 0 && !scannedResult
+              !isScanning && !scannedResult ? styles.reticleIdle : null,
+              isScanning && verifyingProgress > 0 && !scannedResult
                 ? styles.reticleVerifying
                 : null,
               scannedResult ? styles.reticleActive : null,
@@ -141,13 +147,13 @@ export function BarcodeScannerView({
               )}
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={resetScanner}
+                onPress={startScanning}
                 activeOpacity={0.8}
               >
                 <Text style={styles.primaryButtonText}>Scan Another</Text>
               </TouchableOpacity>
             </View>
-          ) : (
+          ) : isScanning ? (
             <View style={styles.statusPill}>
               <Text style={styles.statusPillText}>
                 {verifyingProgress > 0
@@ -155,6 +161,14 @@ export function BarcodeScannerView({
                   : 'Scanning for barcodes...'}
               </Text>
             </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.scanActionButton}
+              onPress={startScanning}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>Scan Barcode</Text>
+            </TouchableOpacity>
           )}
         </View>
       </SafeAreaView>
@@ -213,6 +227,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(56, 189, 248, 0.06)',
   },
+  reticleIdle: {
+    borderColor: 'rgba(148, 163, 184, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.15)',
+  },
   reticleVerifying: {
     borderColor: '#FACC15',
     backgroundColor: 'rgba(250, 204, 21, 0.10)',
@@ -224,6 +242,19 @@ const styles = StyleSheet.create({
   footer: {
     minHeight: 150,
     justifyContent: 'flex-end',
+  },
+  scanActionButton: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   statusPill: {
     alignSelf: 'center',

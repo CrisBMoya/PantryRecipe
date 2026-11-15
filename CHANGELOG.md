@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-11-15
+
+### Changed
+- **Manual Scan Trigger (`src/hooks/useBarcodeScanner.ts`, `src/components/BarcodeScannerView.tsx`):** Disabled automatic barcode scanning on app startup. Added `isScanning` state and a **Scan Barcode** button so the camera only looks for barcodes after the user presses the button.
+
 ## [0.2.0] - 2026-11-15
 
 ### Added

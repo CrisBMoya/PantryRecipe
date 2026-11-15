@@ -15,10 +15,12 @@ interface CandidateState {
 }
 
 export interface UseBarcodeScannerReturn {
+  isScanning: boolean;
   scannedResult: ScannedBarcode | null;
   verifyingProgress: number;
   requiredReads: number;
   handleBarcodeScanned: (result: BarcodeScanningResult) => void;
+  startScanning: () => void;
   resetScanner: () => void;
 }
 
@@ -35,6 +37,7 @@ export function useBarcodeScanner(
   const consensusTimeoutMs =
     config?.consensusTimeoutMs ?? DEFAULT_CONSENSUS_TIMEOUT_MS;
 
+  const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannedResult, setScannedResult] = useState<ScannedBarcode | null>(
     null
   );
@@ -47,15 +50,23 @@ export function useBarcodeScanner(
     lastTimestamp: 0,
   });
 
+  const startScanning = useCallback(() => {
+    candidateRef.current = { data: '', type: '', count: 0, lastTimestamp: 0 };
+    setVerifyingProgress(0);
+    setScannedResult(null);
+    setIsScanning(true);
+  }, []);
+
   const resetScanner = useCallback(() => {
     candidateRef.current = { data: '', type: '', count: 0, lastTimestamp: 0 };
     setVerifyingProgress(0);
     setScannedResult(null);
+    setIsScanning(false);
   }, []);
 
   const handleBarcodeScanned = useCallback(
     (result: BarcodeScanningResult) => {
-      if (scannedResult) return;
+      if (!isScanning || scannedResult) return;
 
       const rawData = result.data?.trim() ?? '';
       const barcodeType = result.type;
@@ -99,6 +110,7 @@ export function useBarcodeScanner(
             status === 'new' ? 'New code saved to file' : 'Old code already in file'
           })`
         );
+        setIsScanning(false);
         setVerifyingProgress(requiredReads);
         setScannedResult(verifiedBarcode);
         onScanned?.(verifiedBarcode);
@@ -106,14 +118,16 @@ export function useBarcodeScanner(
         setVerifyingProgress(current.count);
       }
     },
-    [scannedResult, consensusTimeoutMs, requiredReads, onScanned]
+    [isScanning, scannedResult, consensusTimeoutMs, requiredReads, onScanned]
   );
 
   return {
+    isScanning,
     scannedResult,
     verifyingProgress,
     requiredReads,
     handleBarcodeScanned,
+    startScanning,
     resetScanner,
   };
 }
