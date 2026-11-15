@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { BarcodeScanningResult } from 'expo-camera';
 import { BarcodeScannerConfig, ScannedBarcode } from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
+import { checkAndSaveBarcode } from '../utils/barcodeStorage';
 
 export const DEFAULT_REQUIRED_CONSECUTIVE_READS = 3;
 export const DEFAULT_CONSENSUS_TIMEOUT_MS = 1200;
@@ -83,11 +84,21 @@ export function useBarcodeScanner(
       }
 
       if (current.count >= requiredReads) {
-        const verifiedBarcode: ScannedBarcode = {
+        const baseBarcode: ScannedBarcode = {
           type: barcodeType,
           data: rawData,
           scannedAt: now,
         };
+        const { status } = checkAndSaveBarcode(baseBarcode);
+        const verifiedBarcode: ScannedBarcode = {
+          ...baseBarcode,
+          status,
+        };
+        console.log(
+          `[BarcodeScanner] Code: ${verifiedBarcode.data} | Status: ${status.toUpperCase()} (${
+            status === 'new' ? 'New code saved to file' : 'Old code already in file'
+          })`
+        );
         setVerifyingProgress(requiredReads);
         setScannedResult(verifiedBarcode);
         onScanned?.(verifiedBarcode);

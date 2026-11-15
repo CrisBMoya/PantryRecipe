@@ -103,12 +103,42 @@ export function BarcodeScannerView({
         <View style={styles.footer}>
           {scannedResult ? (
             <View style={styles.resultCard}>
-              <Text style={styles.resultLabel}>
-                VERIFIED BARCODE ({scannedResult.type.toUpperCase()})
-              </Text>
+              <View style={styles.resultHeaderRow}>
+                <Text style={styles.resultLabel}>
+                  VERIFIED BARCODE ({scannedResult.type.toUpperCase()})
+                </Text>
+                {scannedResult.status && (
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      scannedResult.status === 'new'
+                        ? styles.statusBadgeNew
+                        : styles.statusBadgeOld,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        scannedResult.status === 'new'
+                          ? styles.statusBadgeTextNew
+                          : styles.statusBadgeTextOld,
+                      ]}
+                    >
+                      {scannedResult.status === 'new' ? 'NEW CODE' : 'OLD CODE'}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.resultData} selectable>
                 {scannedResult.data}
               </Text>
+              {scannedResult.status && (
+                <Text style={styles.storageMessage}>
+                  {scannedResult.status === 'new'
+                    ? 'New code — saved to local file on device.'
+                    : 'Old code — already exists in local file.'}
+                </Text>
+              )}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={resetScanner}
@@ -219,17 +249,54 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
+  resultHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 8,
+  },
   resultLabel: {
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: 8,
+    flexShrink: 1,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusBadgeNew: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderColor: '#22C55E',
+  },
+  statusBadgeOld: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#F59E0B',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  statusBadgeTextNew: {
+    color: '#4ADE80',
+  },
+  statusBadgeTextOld: {
+    color: '#FBBF24',
   },
   resultData: {
     color: '#F8FAFC',
     fontSize: 22,
     fontWeight: '700',
+    marginBottom: 8,
+  },
+  storageMessage: {
+    color: '#CBD5E1',
+    fontSize: 14,
     marginBottom: 18,
   },
   permissionCard: {

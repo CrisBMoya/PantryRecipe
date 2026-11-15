@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - 2026-11-15
+
+### Added
+- **Local Device Barcode Storage (`src/utils/barcodeStorage.ts`):** Added `expo-file-system` integration to persist scanned barcodes in a local file (`scanned_barcodes.json`) on the device.
+- **New vs. Old Code Detection (`src/hooks/useBarcodeScanner.ts`, `src/types/barcode.ts`):** Checks each verified scan against the local file—saving it if not present (`new`) or flagging it as already saved (`old`).
+- **Scan Status UI (`src/components/BarcodeScannerView.tsx`):** Updated the result card to display both the scanned barcode and whether it is a `NEW CODE` or `OLD CODE`.
+
 ## [0.1.0] - 2026-11-15
 
 ### Added

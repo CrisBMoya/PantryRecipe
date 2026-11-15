@@ -9,6 +9,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 - **Framework:** Expo (`~58.0.25`), React 19 (`19.3.0`), React Native (`0.88.1`), TypeScript (`~6.0.3`).
 - **Entry Point:** `index.ts` -> `App.tsx` (Currently using standard root registration via `registerRootComponent(App)`. *Note: `expo-router` is NOT currently installed; do not import `expo-router` unless explicitly asked to migrate routing*).
 - **Camera & Barcode:** `expo-camera` (`CameraView`, `useCameraPermissions`).
+- **Local Storage:** `expo-file-system` (`File`, `Paths.document`) for persisting scanned barcodes on device (`scanned_barcodes.json`).
 
 ---
 
@@ -25,6 +26,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │   ├── types/
 │   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, etc.)
 │   └── utils/
+│       ├── barcodeStorage.ts           # Local device file persistence & new/old barcode lookup
 │       └── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
 ```
 

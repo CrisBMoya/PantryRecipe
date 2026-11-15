@@ -1,9 +1,20 @@
 import { BarcodeType } from 'expo-camera';
 
+export type BarcodeOriginStatus = 'new' | 'old';
+
 export interface ScannedBarcode {
   type: BarcodeType | string;
   data: string;
   scannedAt: number;
+  status?: BarcodeOriginStatus;
+}
+
+export interface StoredBarcodeEntry {
+  data: string;
+  type: string;
+  firstScannedAt: number;
+  lastScannedAt: number;
+  scanCount: number;
 }
 
 export interface BarcodeScannerConfig {
