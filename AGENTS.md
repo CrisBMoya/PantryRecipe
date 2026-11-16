@@ -63,6 +63,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - Every verified barcode is checked against `Paths.document/scanned_barcodes.json` via `checkAndSaveBarcode` (`src/utils/barcodeStorage.ts`) and tagged with `status: 'new' | 'old'`.
    - When a barcode is `'new'` (or missing `frontPhotoUri`), `BarcodeScannerView` prompts the user to capture a **Front product photo** using `CameraView.takePictureAsync`.
    - Captured photos must be copied from temporary camera cache into persistent storage (`Paths.document/product_photos/<barcode>_front_<timestamp>.jpg`) via `saveFrontProductPhoto` / `attachFrontPhoto`, updating `frontPhotoUri` on the stored entry so it remains available for future API uploads to the backend server.
+   - When the server extracts `ProductInfo` (`product_name` and `brand`), `saveProductInfoForBarcode` persists both `product_name` and `brand` directly alongside the barcode in `scanned_barcodes.json` (as well as inside `productInfo`), and `deleteStoredBarcode` removes an entry and its associated photo file from local storage.
 
 3. **React Native 0.88+ StyleSheet Compatibility:**
    - Use `...StyleSheet.absoluteFill` (NOT `StyleSheet.absoluteFillObject`, which is removed from RN 0.88 type definitions).

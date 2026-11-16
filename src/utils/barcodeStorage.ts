@@ -34,6 +34,39 @@ function writeStoredBarcodes(entries: StoredBarcodeEntry[]): string {
   return file.uri;
 }
 
+function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
+  const productName =
+    typeof item.product_name === 'string' && item.product_name.trim()
+      ? item.product_name.trim()
+      : typeof item.productInfo?.product_name === 'string' &&
+          item.productInfo.product_name.trim()
+        ? item.productInfo.product_name.trim()
+        : undefined;
+
+  const brand =
+    typeof item.brand === 'string' && item.brand.trim()
+      ? item.brand.trim()
+      : typeof item.productInfo?.brand === 'string' &&
+          item.productInfo.brand.trim()
+        ? item.productInfo.brand.trim()
+        : undefined;
+
+  const productInfo: ProductInfo | undefined =
+    productName !== undefined || brand !== undefined
+      ? {
+          product_name: productName ?? '',
+          brand: brand ?? '',
+        }
+      : undefined;
+
+  return {
+    ...item,
+    ...(productName !== undefined ? { product_name: productName } : {}),
+    ...(brand !== undefined ? { brand } : {}),
+    ...(productInfo ? { productInfo } : {}),
+  };
+}
+
 /**
  * Reads all stored barcode entries from the device's local document storage file.
  * Creates an empty storage file if one does not exist yet.
@@ -57,12 +90,14 @@ export function loadStoredBarcodes(): StoredBarcodeEntry[] {
       return [];
     }
 
-    return parsed.filter(
-      (item): item is StoredBarcodeEntry =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof (item as StoredBarcodeEntry).data === 'string'
-    );
+    return parsed
+      .filter(
+        (item): item is StoredBarcodeEntry =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as StoredBarcodeEntry).data === 'string'
+      )
+      .map(normalizeStoredEntry);
   } catch {
     return [];
   }
@@ -173,7 +208,8 @@ export function saveFrontProductPhoto(
 }
 
 /**
- * Updates the stored barcode entry with extracted ProductInfo returned by the backend server.
+ * Updates the stored barcode entry with extracted ProductInfo (product_name and brand)
+ * returned by the backend server.
  */
 export function saveProductInfoForBarcode(
   barcodeData: string,
@@ -189,13 +225,48 @@ export function saveProductInfoForBarcode(
     return null;
   }
 
+  const normalizedProductInfo: ProductInfo = {
+    product_name: productInfo.product_name.trim(),
+    brand: productInfo.brand.trim(),
+  };
+
   const updatedEntry: StoredBarcodeEntry = {
     ...entries[existingIndex],
-    productInfo,
+    product_name: normalizedProductInfo.product_name,
+    brand: normalizedProductInfo.brand,
+    productInfo: normalizedProductInfo,
   };
   entries[existingIndex] = updatedEntry;
   writeStoredBarcodes(entries);
 
   return updatedEntry;
+}
+
+/**
+ * Deletes a stored product/barcode entry from `scanned_barcodes.json` and
+ * cleans up its local front photo file if present.
+ * Returns the remaining stored barcode entries.
+ */
+export function deleteStoredBarcode(barcodeData: string): StoredBarcodeEntry[] {
+  const normalizedData = barcodeData.trim();
+  const entries = loadStoredBarcodes();
+  const targetEntry = entries.find((entry) => entry.data === normalizedData);
+
+  if (targetEntry?.frontPhotoUri) {
+    try {
+      const photoFile = new File(targetEntry.frontPhotoUri);
+      if (photoFile.exists) {
+        photoFile.delete();
+      }
+    } catch (error) {
+      console.warn('Failed to delete associated product photo:', error);
+    }
+  }
+
+  const remainingEntries = entries.filter(
+    (entry) => entry.data !== normalizedData
+  );
+  writeStoredBarcodes(remainingEntries);
+  return remainingEntries;
 }
 

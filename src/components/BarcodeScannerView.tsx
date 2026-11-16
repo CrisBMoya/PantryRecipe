@@ -7,10 +7,17 @@ import {
   SafeAreaView,
   Image,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { BarcodeScannerConfig, ScannedBarcode } from '../types/barcode';
+import {
+  BarcodeScannerConfig,
+  ScannedBarcode,
+  StoredBarcodeEntry,
+} from '../types/barcode';
 import { SUPPORTED_BARCODE_TYPES } from '../utils/barcodeValidator';
+import { SCANNED_CODES_FILENAME } from '../utils/barcodeStorage';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 
 export interface BarcodeScannerViewProps {
@@ -34,6 +41,8 @@ export function BarcodeScannerView({
   const [isTakingPhoto, setIsTakingPhoto] = useState<boolean>(false);
   const [isRetakingPhoto, setIsRetakingPhoto] = useState<boolean>(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isSavedModalVisible, setIsSavedModalVisible] =
+    useState<boolean>(false);
 
   const {
     isScanning,
@@ -42,10 +51,13 @@ export function BarcodeScannerView({
     requiredReads,
     isUploadingPhoto,
     uploadError,
+    storedBarcodes,
     handleBarcodeScanned,
     startScanning,
     attachFrontPhoto,
     uploadFrontPhoto,
+    refreshStoredBarcodes,
+    removeStoredBarcode,
   } = useBarcodeScanner(config, onScanned);
 
   const barcodeTypes = config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES;
@@ -55,10 +67,27 @@ export function BarcodeScannerView({
     ((scannedResult.status === 'new' && !scannedResult.frontPhotoUri) ||
       isRetakingPhoto);
 
+  const scannedProductName =
+    scannedResult?.product_name ?? scannedResult?.productInfo?.product_name;
+  const scannedProductBrand =
+    scannedResult?.brand ?? scannedResult?.productInfo?.brand;
+  const hasScannedProductInfo = Boolean(
+    scannedProductName || scannedProductBrand
+  );
+
   const handleStartScanning = () => {
     setPhotoError(null);
     setIsRetakingPhoto(false);
     startScanning();
+  };
+
+  const handleOpenSavedModal = () => {
+    refreshStoredBarcodes();
+    setIsSavedModalVisible(true);
+  };
+
+  const handleDeleteBarcode = (barcodeData: string) => {
+    removeStoredBarcode(barcodeData);
   };
 
   const handleCaptureFrontPhoto = async () => {
@@ -91,6 +120,63 @@ export function BarcodeScannerView({
     } finally {
       setIsTakingPhoto(false);
     }
+  };
+
+  const renderSavedItem = ({ item }: { item: StoredBarcodeEntry }) => {
+    const productName =
+      item.product_name ?? item.productInfo?.product_name ?? 'Not extracted yet';
+    const brandName =
+      item.brand ?? item.productInfo?.brand ?? 'Not extracted yet';
+
+    return (
+      <View style={styles.savedItemCard}>
+        <View style={styles.savedItemTopRow}>
+          {item.frontPhotoUri ? (
+            <Image
+              source={{ uri: item.frontPhotoUri }}
+              style={styles.savedItemThumbnail}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.savedItemPlaceholderThumb}>
+              <Text style={styles.savedItemPlaceholderText}>NO PHOTO</Text>
+            </View>
+          )}
+
+          <View style={styles.savedItemDetails}>
+            <Text style={styles.savedItemProductName} numberOfLines={2}>
+              {productName}
+            </Text>
+            <Text style={styles.savedItemBrand} numberOfLines={1}>
+              Brand: {brandName}
+            </Text>
+            <View style={styles.savedItemBarcodeRow}>
+              <Text style={styles.savedItemBarcodeData} selectable>
+                {item.data}
+              </Text>
+              <View style={styles.savedItemTypeBadge}>
+                <Text style={styles.savedItemTypeText}>
+                  {item.type.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.savedItemFooterRow}>
+          <Text style={styles.savedItemMetaText}>
+            Scanned {item.scanCount ?? 1}x
+          </Text>
+          <TouchableOpacity
+            style={styles.deleteItemButton}
+            onPress={() => handleDeleteBarcode(item.data)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteItemButtonText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   if (!permission) {
@@ -259,7 +345,7 @@ export function BarcodeScannerView({
                       {scannedResult.status === 'new'
                         ? isUploadingPhoto
                           ? 'New code — sending front product photo to server...'
-                          : scannedResult.productInfo
+                          : hasScannedProductInfo
                             ? 'New code — product details extracted from server.'
                             : 'New code — barcode and front product photo saved.'
                         : 'Old code — already exists in local file.'}
@@ -297,7 +383,7 @@ export function BarcodeScannerView({
                               Retake Front Photo
                             </Text>
                           </TouchableOpacity>
-                          {!isUploadingPhoto && !scannedResult.productInfo && (
+                          {!isUploadingPhoto && !hasScannedProductInfo && (
                             <TouchableOpacity
                               onPress={() => void uploadFrontPhoto()}
                               activeOpacity={0.8}
@@ -329,31 +415,47 @@ export function BarcodeScannerView({
                     </View>
                   )}
 
-                  {scannedResult.productInfo && (
+                  {hasScannedProductInfo && (
                     <View style={styles.productInfoCard}>
                       <Text style={styles.productInfoLabel}>
                         EXTRACTED PRODUCT INFO
                       </Text>
                       <Text style={styles.productInfoName}>
-                        {scannedResult.productInfo.product_name}
+                        {scannedProductName || 'Unknown Product'}
                       </Text>
                       <Text style={styles.productInfoBrand}>
-                        Brand: {scannedResult.productInfo.brand}
+                        Brand: {scannedProductBrand || 'Unknown Brand'}
                       </Text>
                     </View>
                   )}
 
-                  <TouchableOpacity
-                    style={[
-                      styles.primaryButton,
-                      isUploadingPhoto ? styles.buttonDisabled : null,
-                    ]}
-                    onPress={handleStartScanning}
-                    disabled={isUploadingPhoto}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.primaryButtonText}>Scan Another</Text>
-                  </TouchableOpacity>
+                  <View style={styles.resultActionButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryButton,
+                        isUploadingPhoto ? styles.buttonDisabled : null,
+                      ]}
+                      onPress={handleStartScanning}
+                      disabled={isUploadingPhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.primaryButtonText}>Scan Another</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteResultButton,
+                        isUploadingPhoto ? styles.buttonDisabled : null,
+                      ]}
+                      onPress={() => handleDeleteBarcode(scannedResult.data)}
+                      disabled={isUploadingPhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.deleteResultButtonText}>
+                        Delete Product from JSON
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               )}
             </View>
@@ -374,8 +476,64 @@ export function BarcodeScannerView({
               <Text style={styles.primaryButtonText}>Scan Barcode</Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={styles.savedProductsButton}
+            onPress={handleOpenSavedModal}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.savedProductsButtonText}>
+              Saved Products ({storedBarcodes.length})
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={isSavedModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsSavedModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitles}>
+                <Text style={styles.modalTitle}>Saved Products</Text>
+                <Text style={styles.modalSubtitle}>
+                  {SCANNED_CODES_FILENAME} ({storedBarcodes.length}{' '}
+                  {storedBarcodes.length === 1 ? 'item' : 'items'})
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setIsSavedModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {storedBarcodes.length === 0 ? (
+              <View style={styles.emptyListContainer}>
+                <Text style={styles.emptyListTitle}>No saved products yet</Text>
+                <Text style={styles.emptyListSubtitle}>
+                  Scan a product barcode and take a front photo to save its
+                  barcode, product name, and brand in {SCANNED_CODES_FILENAME}.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={[...storedBarcodes].reverse()}
+                keyExtractor={(item) => item.data}
+                renderItem={renderSavedItem}
+                contentContainerStyle={styles.savedListContent}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -453,6 +611,7 @@ const styles = StyleSheet.create({
   footer: {
     minHeight: 150,
     justifyContent: 'flex-end',
+    gap: 12,
   },
   scanActionButton: {
     backgroundColor: '#0284C7',
@@ -729,6 +888,209 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  resultActionButtons: {
+    gap: 10,
+  },
+  deleteResultButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  deleteResultButtonText: {
+    color: '#FCA5A5',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  savedProductsButton: {
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+  },
+  savedProductsButtonText: {
+    color: '#38BDF8',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.85)',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    paddingTop: 36,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  modalHeaderTitles: {
+    flex: 1,
+    marginRight: 12,
+  },
+  modalTitle: {
+    color: '#F8FAFC',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    color: '#94A3B8',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  modalCloseButtonText: {
+    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyListContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyListTitle: {
+    color: '#F8FAFC',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyListSubtitle: {
+    color: '#94A3B8',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  savedListContent: {
+    padding: 16,
+    gap: 12,
+    paddingBottom: 36,
+  },
+  savedItemCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 12,
+  },
+  savedItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  savedItemThumbnail: {
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+  },
+  savedItemPlaceholderThumb: {
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  savedItemPlaceholderText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  savedItemDetails: {
+    flex: 1,
+    gap: 3,
+  },
+  savedItemProductName: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  savedItemBrand: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  savedItemBarcodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  savedItemBarcodeData: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  savedItemTypeBadge: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#475569',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
+  savedItemTypeText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  savedItemFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    paddingTop: 10,
+  },
+  savedItemMetaText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  deleteItemButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  deleteItemButtonText: {
+    color: '#FCA5A5',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

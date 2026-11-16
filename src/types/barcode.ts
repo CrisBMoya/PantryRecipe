@@ -13,6 +13,8 @@ export interface ScannedBarcode {
   scannedAt: number;
   status?: BarcodeOriginStatus;
   frontPhotoUri?: string;
+  product_name?: string;
+  brand?: string;
   productInfo?: ProductInfo;
 }
 
@@ -23,6 +25,8 @@ export interface StoredBarcodeEntry {
   lastScannedAt: number;
   scanCount: number;
   frontPhotoUri?: string;
+  product_name?: string;
+  brand?: string;
   productInfo?: ProductInfo;
 }
 

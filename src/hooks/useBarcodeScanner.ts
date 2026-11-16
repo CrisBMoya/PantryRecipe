@@ -4,10 +4,13 @@ import {
   BarcodeScannerConfig,
   ProductInfo,
   ScannedBarcode,
+  StoredBarcodeEntry,
 } from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
 import {
   checkAndSaveBarcode,
+  deleteStoredBarcode,
+  loadStoredBarcodes,
   saveFrontProductPhoto,
   saveProductInfoForBarcode,
 } from '../utils/barcodeStorage';
@@ -34,11 +37,14 @@ export interface UseBarcodeScannerReturn {
   requiredReads: number;
   isUploadingPhoto: boolean;
   uploadError: string | null;
+  storedBarcodes: StoredBarcodeEntry[];
   handleBarcodeScanned: (result: BarcodeScanningResult) => void;
   startScanning: () => void;
   resetScanner: () => void;
   attachFrontPhoto: (sourcePhotoUri: string) => string | null;
   uploadFrontPhoto: (photoUriOverride?: string) => Promise<ProductInfo | null>;
+  refreshStoredBarcodes: () => StoredBarcodeEntry[];
+  removeStoredBarcode: (barcodeData: string) => StoredBarcodeEntry[];
 }
 
 /**
@@ -62,6 +68,9 @@ export function useBarcodeScanner(
   const [verifyingProgress, setVerifyingProgress] = useState<number>(0);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [storedBarcodes, setStoredBarcodes] = useState<StoredBarcodeEntry[]>(
+    () => loadStoredBarcodes()
+  );
 
   const candidateRef = useRef<CandidateState>({
     data: '',
@@ -69,6 +78,25 @@ export function useBarcodeScanner(
     count: 0,
     lastTimestamp: 0,
   });
+
+  const refreshStoredBarcodes = useCallback((): StoredBarcodeEntry[] => {
+    const entries = loadStoredBarcodes();
+    setStoredBarcodes(entries);
+    return entries;
+  }, []);
+
+  const removeStoredBarcode = useCallback(
+    (barcodeData: string): StoredBarcodeEntry[] => {
+      const normalized = barcodeData.trim();
+      const remaining = deleteStoredBarcode(normalized);
+      setStoredBarcodes(remaining);
+      setScannedResult((prev) =>
+        prev && prev.data === normalized ? null : prev
+      );
+      return remaining;
+    },
+    []
+  );
 
   useEffect(() => {
     const resolvedUrl = resolveServerBaseUrl(serverBaseUrl);
@@ -116,6 +144,7 @@ export function useBarcodeScanner(
           serverBaseUrl
         );
         saveProductInfoForBarcode(targetBarcodeData, productInfo);
+        setStoredBarcodes(loadStoredBarcodes());
 
         setScannedResult((prev) => {
           if (!prev || prev.data !== targetBarcodeData) {
@@ -124,6 +153,8 @@ export function useBarcodeScanner(
           const updated: ScannedBarcode = {
             ...prev,
             frontPhotoUri: targetUri,
+            product_name: productInfo.product_name,
+            brand: productInfo.brand,
             productInfo,
           };
           onScanned?.(updated);
@@ -158,9 +189,12 @@ export function useBarcodeScanner(
           scannedResult.data,
           sourcePhotoUri
         );
+        setStoredBarcodes(loadStoredBarcodes());
         const updatedBarcode: ScannedBarcode = {
           ...scannedResult,
           frontPhotoUri: savedPhotoUri,
+          product_name: undefined,
+          brand: undefined,
           productInfo: undefined,
         };
         console.log(
@@ -215,10 +249,13 @@ export function useBarcodeScanner(
           scannedAt: now,
         };
         const { status, entry } = checkAndSaveBarcode(baseBarcode);
+        setStoredBarcodes(loadStoredBarcodes());
         const verifiedBarcode: ScannedBarcode = {
           ...baseBarcode,
           status,
           frontPhotoUri: entry.frontPhotoUri,
+          product_name: entry.product_name ?? entry.productInfo?.product_name,
+          brand: entry.brand ?? entry.productInfo?.brand,
           productInfo: entry.productInfo,
         };
         console.log(
@@ -244,10 +281,13 @@ export function useBarcodeScanner(
     requiredReads,
     isUploadingPhoto,
     uploadError,
+    storedBarcodes,
     handleBarcodeScanned,
     startScanning,
     resetScanner,
     attachFrontPhoto,
     uploadFrontPhoto,
+    refreshStoredBarcodes,
+    removeStoredBarcode,
   };
 }
