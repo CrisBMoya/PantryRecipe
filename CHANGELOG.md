@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 2026-11-16
+
+### Added
+- **LangGraph & Gemini Backend Agent (`server/`):** Initialized the modular Python agent workflow using `langgraph`, `langchain`, `langchain-google-genai`, and `python-dotenv` managed via `uv`. Added `server/app/config.py`, `server/app/agents/` (`state.py`, `nodes.py`, `graph.py`), and `server/main.py` to run a Gemini-powered Hello World `StateGraph` agent using `GOOGLE_API_KEY` from `server/.env`.
+
 ## [0.4.0] - 2026-11-16
 
 ### Added

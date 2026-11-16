@@ -18,8 +18,15 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 ```text
 ├── App.tsx                             # Root application component & screen host
 ├── app.json                            # Expo config & native permissions (Android CAMERA)
-├── server/
-│   └── pyproject.toml                  # Backend server project configuration (Python)
+├── server/                             # Python backend & LangGraph AI agent server (managed via UV)
+│   ├── pyproject.toml                  # Python project dependencies (langgraph, langchain, langchain-google-genai, python-dotenv)
+│   ├── main.py                         # Entry point for running the LangGraph agent flow
+│   └── app/
+│       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY) & Gemini LLM factory
+│       └── agents/
+│           ├── state.py                # LangGraph AgentState definition
+│           ├── nodes.py                # LangGraph node functions (Gemini invocation)
+│           └── graph.py                # StateGraph builder & execution helpers
 ├── src/
 │   ├── components/
 │   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result & front product photo capture UI
@@ -67,3 +74,15 @@ npx tsc --noEmit            # Run TypeScript compiler check (MUST pass with 0 er
 npm run start               # Start Expo development server
 npm run android             # Start on Android device/emulator
 ```
+
+### Python Backend (`server/`)
+- **Package & Environment Manager:** `uv` (Python >= 3.14).
+- **External Virtual Environment:** Located at `C:\Users\Tobal\virtual_environments\server\.venv\`. Always pass `--python "C:\Users\Tobal\virtual_environments\server\.venv"` or set `UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"` when running `uv` commands inside `server/`.
+- **LLM & Framework:** LangChain + LangGraph (`StateGraph`) using Gemini (`langchain-google-genai`) configured via `GOOGLE_API_KEY` in `server/.env`.
+- **Running the Agent:**
+  ```powershell
+  cd server
+  $env:UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"
+  uv run python main.py
+  ```
+
