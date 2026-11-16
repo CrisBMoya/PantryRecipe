@@ -7,6 +7,7 @@ export interface ScannedBarcode {
   data: string;
   scannedAt: number;
   status?: BarcodeOriginStatus;
+  frontPhotoUri?: string;
 }
 
 export interface StoredBarcodeEntry {
@@ -15,6 +16,7 @@ export interface StoredBarcodeEntry {
   firstScannedAt: number;
   lastScannedAt: number;
   scanCount: number;
+  frontPhotoUri?: string;
 }
 
 export interface BarcodeScannerConfig {

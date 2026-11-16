@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-11-16
+
+### Added
+- **Front Product Photo Capture & Storage (`src/components/BarcodeScannerView.tsx`, `src/hooks/useBarcodeScanner.ts`, `src/utils/barcodeStorage.ts`, `src/types/barcode.ts`):** When a newly scanned (`new`) barcode is detected, the app now prompts the user to take a **Front product photo** using the camera, copies the image to persistent device storage (`Paths.document/product_photos`), and links `frontPhotoUri` to the stored barcode record in `scanned_barcodes.json` for future API submission.
+
 ## [0.3.0] - 2026-11-15
 
 ### Changed

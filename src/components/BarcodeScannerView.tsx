@@ -1,9 +1,12 @@
+import { useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   SafeAreaView,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BarcodeScannerConfig, ScannedBarcode } from '../types/barcode';
@@ -12,7 +15,8 @@ import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 
 export interface BarcodeScannerViewProps {
   /**
-   * Optional callback fired as soon as a barcode passes checksum and multi-frame consensus.
+   * Optional callback fired as soon as a barcode passes checksum and multi-frame consensus,
+   * and again when a front product photo is captured and saved.
    */
   onScanned?: (barcode: ScannedBarcode) => void;
   /**
@@ -26,6 +30,11 @@ export function BarcodeScannerView({
   config,
 }: BarcodeScannerViewProps) {
   const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [isTakingPhoto, setIsTakingPhoto] = useState<boolean>(false);
+  const [isRetakingPhoto, setIsRetakingPhoto] = useState<boolean>(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
   const {
     isScanning,
     scannedResult,
@@ -33,9 +42,53 @@ export function BarcodeScannerView({
     requiredReads,
     handleBarcodeScanned,
     startScanning,
+    attachFrontPhoto,
   } = useBarcodeScanner(config, onScanned);
 
   const barcodeTypes = config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES;
+
+  const isAwaitingFrontPhoto =
+    scannedResult !== null &&
+    ((scannedResult.status === 'new' && !scannedResult.frontPhotoUri) ||
+      isRetakingPhoto);
+
+  const handleStartScanning = () => {
+    setPhotoError(null);
+    setIsRetakingPhoto(false);
+    startScanning();
+  };
+
+  const handleCaptureFrontPhoto = async () => {
+    if (!cameraRef.current || isTakingPhoto || !scannedResult) {
+      return;
+    }
+
+    setPhotoError(null);
+    setIsTakingPhoto(true);
+    try {
+      const captured = await cameraRef.current.takePictureAsync({
+        quality: 0.85,
+      });
+
+      if (!captured?.uri) {
+        setPhotoError('Could not capture photo. Please try again.');
+        return;
+      }
+
+      const savedUri = attachFrontPhoto(captured.uri);
+      if (!savedUri) {
+        setPhotoError('Failed to save photo to device storage.');
+        return;
+      }
+
+      setIsRetakingPhoto(false);
+    } catch (error) {
+      console.warn('Error capturing front product photo:', error);
+      setPhotoError('Error taking photo. Please hold steady and try again.');
+    } finally {
+      setIsTakingPhoto(false);
+    }
+  };
 
   if (!permission) {
     return (
@@ -51,7 +104,7 @@ export function BarcodeScannerView({
         <View style={styles.permissionCard}>
           <Text style={styles.title}>Camera Access Needed</Text>
           <Text style={styles.subtitle}>
-            We need permission to use your camera to scan barcodes and display their text.
+            We need permission to use your camera to scan barcodes and take product photos.
           </Text>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -68,6 +121,7 @@ export function BarcodeScannerView({
   return (
     <View style={styles.container}>
       <CameraView
+        ref={cameraRef}
         style={styles.camera}
         facing="back"
         autofocus="on"
@@ -81,15 +135,19 @@ export function BarcodeScannerView({
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Barcode Scanner</Text>
+          <Text style={styles.headerTitle}>
+            {isAwaitingFrontPhoto ? 'Front Product Photo' : 'Barcode Scanner'}
+          </Text>
           <Text style={styles.headerSubtitle}>
-            {scannedResult
-              ? 'Barcode verified!'
-              : !isScanning
-                ? 'Press the button below to scan a barcode'
-                : verifyingProgress > 0
-                  ? `Verifying barcode (${verifyingProgress}/${requiredReads})...`
-                  : 'Hold steady over a barcode'}
+            {isAwaitingFrontPhoto
+              ? 'New barcode detected — frame the front of the product and take a photo'
+              : scannedResult
+                ? 'Barcode verified!'
+                : !isScanning
+                  ? 'Press the button below to scan a barcode'
+                  : verifyingProgress > 0
+                    ? `Verifying barcode (${verifyingProgress}/${requiredReads})...`
+                    : 'Hold steady over a barcode'}
           </Text>
         </View>
 
@@ -97,11 +155,14 @@ export function BarcodeScannerView({
           <View
             style={[
               styles.reticle,
+              isAwaitingFrontPhoto ? styles.reticlePhotoFrame : null,
               !isScanning && !scannedResult ? styles.reticleIdle : null,
               isScanning && verifyingProgress > 0 && !scannedResult
                 ? styles.reticleVerifying
                 : null,
-              scannedResult ? styles.reticleActive : null,
+              scannedResult && !isAwaitingFrontPhoto
+                ? styles.reticleActive
+                : null,
             ]}
           />
         </View>
@@ -138,20 +199,108 @@ export function BarcodeScannerView({
               <Text style={styles.resultData} selectable>
                 {scannedResult.data}
               </Text>
-              {scannedResult.status && (
-                <Text style={styles.storageMessage}>
-                  {scannedResult.status === 'new'
-                    ? 'New code — saved to local file on device.'
-                    : 'Old code — already exists in local file.'}
-                </Text>
+
+              {isAwaitingFrontPhoto ? (
+                <View style={styles.photoPromptSection}>
+                  <View style={styles.photoPromptBanner}>
+                    <Text style={styles.photoPromptTitle}>
+                      Front product photo required
+                    </Text>
+                    <Text style={styles.photoPromptSubtitle}>
+                      Please take a clear photo of the front of the product. It will be saved on your device to be sent to the server later.
+                    </Text>
+                  </View>
+
+                  {photoError && (
+                    <Text style={styles.errorText}>{photoError}</Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.photoCaptureButton,
+                      isTakingPhoto ? styles.buttonDisabled : null,
+                    ]}
+                    onPress={handleCaptureFrontPhoto}
+                    disabled={isTakingPhoto}
+                    activeOpacity={0.8}
+                  >
+                    {isTakingPhoto ? (
+                      <View style={styles.buttonLoadingRow}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <Text style={styles.primaryButtonText}>
+                          Saving Photo...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.primaryButtonText}>
+                        Take Front Product Photo
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {isRetakingPhoto && (
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() => setIsRetakingPhoto(false)}
+                      disabled={isTakingPhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <>
+                  {scannedResult.status && (
+                    <Text style={styles.storageMessage}>
+                      {scannedResult.status === 'new'
+                        ? 'New code — barcode and front product photo saved for API upload.'
+                        : 'Old code — already exists in local file.'}
+                    </Text>
+                  )}
+
+                  {scannedResult.frontPhotoUri && (
+                    <View style={styles.savedPhotoContainer}>
+                      <Image
+                        source={{ uri: scannedResult.frontPhotoUri }}
+                        style={styles.savedPhotoThumbnail}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.savedPhotoInfo}>
+                        <Text style={styles.savedPhotoTitle}>
+                          Front Product Photo Saved
+                        </Text>
+                        <Text
+                          style={styles.savedPhotoUri}
+                          numberOfLines={1}
+                          ellipsizeMode="middle"
+                        >
+                          {scannedResult.frontPhotoUri}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setPhotoError(null);
+                            setIsRetakingPhoto(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.retakeLinkText}>
+                            Retake Front Photo
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={handleStartScanning}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.primaryButtonText}>Scan Another</Text>
+                  </TouchableOpacity>
+                </>
               )}
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={startScanning}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.primaryButtonText}>Scan Another</Text>
-              </TouchableOpacity>
             </View>
           ) : isScanning ? (
             <View style={styles.statusPill}>
@@ -164,7 +313,7 @@ export function BarcodeScannerView({
           ) : (
             <TouchableOpacity
               style={styles.scanActionButton}
-              onPress={startScanning}
+              onPress={handleStartScanning}
               activeOpacity={0.8}
             >
               <Text style={styles.primaryButtonText}>Scan Barcode</Text>
@@ -214,6 +363,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 14,
     marginTop: 4,
+    textAlign: 'center',
   },
   reticleContainer: {
     alignItems: 'center',
@@ -226,6 +376,12 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF8',
     borderRadius: 20,
     backgroundColor: 'rgba(56, 189, 248, 0.06)',
+  },
+  reticlePhotoFrame: {
+    width: 260,
+    height: 260,
+    borderColor: '#A855F7',
+    backgroundColor: 'rgba(168, 85, 247, 0.08)',
   },
   reticleIdle: {
     borderColor: 'rgba(148, 163, 184, 0.5)',
@@ -328,7 +484,100 @@ const styles = StyleSheet.create({
   storageMessage: {
     color: '#CBD5E1',
     fontSize: 14,
-    marginBottom: 18,
+    marginBottom: 14,
+  },
+  photoPromptSection: {
+    marginTop: 4,
+    gap: 12,
+  },
+  photoPromptBanner: {
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.45)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  photoPromptTitle: {
+    color: '#E9D5FF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  photoPromptSubtitle: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  photoCaptureButton: {
+    backgroundColor: '#9333EA',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+  buttonLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  secondaryButton: {
+    backgroundColor: '#334155',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#F87171',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  savedPhotoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 12,
+  },
+  savedPhotoThumbnail: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#1E293B',
+  },
+  savedPhotoInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  savedPhotoTitle: {
+    color: '#4ADE80',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  savedPhotoUri: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  retakeLinkText: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '600',
   },
   permissionCard: {
     backgroundColor: '#1E293B',

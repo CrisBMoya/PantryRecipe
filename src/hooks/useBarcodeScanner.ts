@@ -2,7 +2,10 @@ import { useState, useRef, useCallback } from 'react';
 import { BarcodeScanningResult } from 'expo-camera';
 import { BarcodeScannerConfig, ScannedBarcode } from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
-import { checkAndSaveBarcode } from '../utils/barcodeStorage';
+import {
+  checkAndSaveBarcode,
+  saveFrontProductPhoto,
+} from '../utils/barcodeStorage';
 
 export const DEFAULT_REQUIRED_CONSECUTIVE_READS = 3;
 export const DEFAULT_CONSENSUS_TIMEOUT_MS = 1200;
@@ -22,6 +25,7 @@ export interface UseBarcodeScannerReturn {
   handleBarcodeScanned: (result: BarcodeScanningResult) => void;
   startScanning: () => void;
   resetScanner: () => void;
+  attachFrontPhoto: (sourcePhotoUri: string) => string | null;
 }
 
 /**
@@ -64,6 +68,33 @@ export function useBarcodeScanner(
     setIsScanning(false);
   }, []);
 
+  const attachFrontPhoto = useCallback(
+    (sourcePhotoUri: string): string | null => {
+      if (!scannedResult) return null;
+
+      try {
+        const { savedPhotoUri } = saveFrontProductPhoto(
+          scannedResult.data,
+          sourcePhotoUri
+        );
+        const updatedBarcode: ScannedBarcode = {
+          ...scannedResult,
+          frontPhotoUri: savedPhotoUri,
+        };
+        console.log(
+          `[BarcodeScanner] Saved front product photo for ${scannedResult.data}: ${savedPhotoUri}`
+        );
+        setScannedResult(updatedBarcode);
+        onScanned?.(updatedBarcode);
+        return savedPhotoUri;
+      } catch (error) {
+        console.warn('Failed to save front product photo:', error);
+        return null;
+      }
+    },
+    [scannedResult, onScanned]
+  );
+
   const handleBarcodeScanned = useCallback(
     (result: BarcodeScanningResult) => {
       if (!isScanning || scannedResult) return;
@@ -100,10 +131,11 @@ export function useBarcodeScanner(
           data: rawData,
           scannedAt: now,
         };
-        const { status } = checkAndSaveBarcode(baseBarcode);
+        const { status, entry } = checkAndSaveBarcode(baseBarcode);
         const verifiedBarcode: ScannedBarcode = {
           ...baseBarcode,
           status,
+          frontPhotoUri: entry.frontPhotoUri,
         };
         console.log(
           `[BarcodeScanner] Code: ${verifiedBarcode.data} | Status: ${status.toUpperCase()} (${
@@ -129,5 +161,6 @@ export function useBarcodeScanner(
     handleBarcodeScanned,
     startScanning,
     resetScanner,
+    attachFrontPhoto,
   };
 }
