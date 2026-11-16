@@ -1,11 +1,21 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { BarcodeScanningResult } from 'expo-camera';
-import { BarcodeScannerConfig, ScannedBarcode } from '../types/barcode';
+import {
+  BarcodeScannerConfig,
+  ProductInfo,
+  ScannedBarcode,
+} from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
 import {
   checkAndSaveBarcode,
   saveFrontProductPhoto,
+  saveProductInfoForBarcode,
 } from '../utils/barcodeStorage';
+import {
+  DEFAULT_SERVER_PORT,
+  resolveServerBaseUrl,
+  uploadProductPhotoBinary,
+} from '../utils/productApi';
 
 export const DEFAULT_REQUIRED_CONSECUTIVE_READS = 3;
 export const DEFAULT_CONSENSUS_TIMEOUT_MS = 1200;
@@ -22,10 +32,13 @@ export interface UseBarcodeScannerReturn {
   scannedResult: ScannedBarcode | null;
   verifyingProgress: number;
   requiredReads: number;
+  isUploadingPhoto: boolean;
+  uploadError: string | null;
   handleBarcodeScanned: (result: BarcodeScanningResult) => void;
   startScanning: () => void;
   resetScanner: () => void;
   attachFrontPhoto: (sourcePhotoUri: string) => string | null;
+  uploadFrontPhoto: (photoUriOverride?: string) => Promise<ProductInfo | null>;
 }
 
 /**
@@ -40,12 +53,15 @@ export function useBarcodeScanner(
     config?.requiredConsecutiveReads ?? DEFAULT_REQUIRED_CONSECUTIVE_READS;
   const consensusTimeoutMs =
     config?.consensusTimeoutMs ?? DEFAULT_CONSENSUS_TIMEOUT_MS;
+  const serverBaseUrl = config?.serverBaseUrl;
 
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannedResult, setScannedResult] = useState<ScannedBarcode | null>(
     null
   );
   const [verifyingProgress, setVerifyingProgress] = useState<number>(0);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const candidateRef = useRef<CandidateState>({
     data: '',
@@ -54,10 +70,23 @@ export function useBarcodeScanner(
     lastTimestamp: 0,
   });
 
+  useEffect(() => {
+    const resolvedUrl = resolveServerBaseUrl(serverBaseUrl);
+    const parsedUrl = new URL(resolvedUrl);
+    const port =
+      parsedUrl.port ||
+      (parsedUrl.protocol === 'https:' ? '443' : String(DEFAULT_SERVER_PORT));
+    console.log(
+      `[BarcodeScanner] Configured backend server URL: ${resolvedUrl} (Port: ${port})`
+    );
+  }, [serverBaseUrl]);
+
   const startScanning = useCallback(() => {
     candidateRef.current = { data: '', type: '', count: 0, lastTimestamp: 0 };
     setVerifyingProgress(0);
     setScannedResult(null);
+    setUploadError(null);
+    setIsUploadingPhoto(false);
     setIsScanning(true);
   }, []);
 
@@ -65,8 +94,60 @@ export function useBarcodeScanner(
     candidateRef.current = { data: '', type: '', count: 0, lastTimestamp: 0 };
     setVerifyingProgress(0);
     setScannedResult(null);
+    setUploadError(null);
+    setIsUploadingPhoto(false);
     setIsScanning(false);
   }, []);
+
+  const uploadFrontPhoto = useCallback(
+    async (photoUriOverride?: string): Promise<ProductInfo | null> => {
+      const targetUri = photoUriOverride ?? scannedResult?.frontPhotoUri;
+      const targetBarcodeData = scannedResult?.data;
+      if (!targetUri || !targetBarcodeData) {
+        return null;
+      }
+
+      setIsUploadingPhoto(true);
+      setUploadError(null);
+
+      try {
+        const productInfo = await uploadProductPhotoBinary(
+          targetUri,
+          serverBaseUrl
+        );
+        saveProductInfoForBarcode(targetBarcodeData, productInfo);
+
+        setScannedResult((prev) => {
+          if (!prev || prev.data !== targetBarcodeData) {
+            return prev;
+          }
+          const updated: ScannedBarcode = {
+            ...prev,
+            frontPhotoUri: targetUri,
+            productInfo,
+          };
+          onScanned?.(updated);
+          return updated;
+        });
+
+        console.log(
+          `[BarcodeScanner] Extracted product info for ${targetBarcodeData}: ${productInfo.brand} - ${productInfo.product_name}`
+        );
+        return productInfo;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to send product photo to server.';
+        console.warn('Failed to upload front product photo to server:', error);
+        setUploadError(message);
+        return null;
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    },
+    [scannedResult, serverBaseUrl, onScanned]
+  );
 
   const attachFrontPhoto = useCallback(
     (sourcePhotoUri: string): string | null => {
@@ -80,19 +161,21 @@ export function useBarcodeScanner(
         const updatedBarcode: ScannedBarcode = {
           ...scannedResult,
           frontPhotoUri: savedPhotoUri,
+          productInfo: undefined,
         };
         console.log(
           `[BarcodeScanner] Saved front product photo for ${scannedResult.data}: ${savedPhotoUri}`
         );
         setScannedResult(updatedBarcode);
         onScanned?.(updatedBarcode);
+        void uploadFrontPhoto(savedPhotoUri);
         return savedPhotoUri;
       } catch (error) {
         console.warn('Failed to save front product photo:', error);
         return null;
       }
     },
-    [scannedResult, onScanned]
+    [scannedResult, onScanned, uploadFrontPhoto]
   );
 
   const handleBarcodeScanned = useCallback(
@@ -136,6 +219,7 @@ export function useBarcodeScanner(
           ...baseBarcode,
           status,
           frontPhotoUri: entry.frontPhotoUri,
+          productInfo: entry.productInfo,
         };
         console.log(
           `[BarcodeScanner] Code: ${verifiedBarcode.data} | Status: ${status.toUpperCase()} (${
@@ -158,9 +242,12 @@ export function useBarcodeScanner(
     scannedResult,
     verifyingProgress,
     requiredReads,
+    isUploadingPhoto,
+    uploadError,
     handleBarcodeScanned,
     startScanning,
     resetScanner,
     attachFrontPhoto,
+    uploadFrontPhoto,
   };
 }

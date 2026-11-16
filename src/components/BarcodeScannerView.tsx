@@ -40,9 +40,12 @@ export function BarcodeScannerView({
     scannedResult,
     verifyingProgress,
     requiredReads,
+    isUploadingPhoto,
+    uploadError,
     handleBarcodeScanned,
     startScanning,
     attachFrontPhoto,
+    uploadFrontPhoto,
   } = useBarcodeScanner(config, onScanned);
 
   const barcodeTypes = config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES;
@@ -207,7 +210,7 @@ export function BarcodeScannerView({
                       Front product photo required
                     </Text>
                     <Text style={styles.photoPromptSubtitle}>
-                      Please take a clear photo of the front of the product. It will be saved on your device to be sent to the server later.
+                      Please take a clear photo of the front of the product. It will be saved on your device and sent to the server for product extraction.
                     </Text>
                   </View>
 
@@ -254,7 +257,11 @@ export function BarcodeScannerView({
                   {scannedResult.status && (
                     <Text style={styles.storageMessage}>
                       {scannedResult.status === 'new'
-                        ? 'New code — barcode and front product photo saved for API upload.'
+                        ? isUploadingPhoto
+                          ? 'New code — sending front product photo to server...'
+                          : scannedResult.productInfo
+                            ? 'New code — product details extracted from server.'
+                            : 'New code — barcode and front product photo saved.'
                         : 'Old code — already exists in local file.'}
                     </Text>
                   )}
@@ -277,24 +284,72 @@ export function BarcodeScannerView({
                         >
                           {scannedResult.frontPhotoUri}
                         </Text>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setPhotoError(null);
-                            setIsRetakingPhoto(true);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.retakeLinkText}>
-                            Retake Front Photo
-                          </Text>
-                        </TouchableOpacity>
+                        <View style={styles.photoActionLinksRow}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setPhotoError(null);
+                              setIsRetakingPhoto(true);
+                            }}
+                            disabled={isUploadingPhoto}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.retakeLinkText}>
+                              Retake Front Photo
+                            </Text>
+                          </TouchableOpacity>
+                          {!isUploadingPhoto && !scannedResult.productInfo && (
+                            <TouchableOpacity
+                              onPress={() => void uploadFrontPhoto()}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.retryUploadLinkText}>
+                                {uploadError ? 'Retry Upload' : 'Send to Server'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
                     </View>
                   )}
 
+                  {isUploadingPhoto && (
+                    <View style={styles.uploadingBanner}>
+                      <ActivityIndicator color="#38BDF8" size="small" />
+                      <Text style={styles.uploadingBannerText}>
+                        Analyzing product photo on server...
+                      </Text>
+                    </View>
+                  )}
+
+                  {uploadError && !isUploadingPhoto && (
+                    <View style={styles.uploadErrorContainer}>
+                      <Text style={styles.errorText}>
+                        Server upload failed: {uploadError}
+                      </Text>
+                    </View>
+                  )}
+
+                  {scannedResult.productInfo && (
+                    <View style={styles.productInfoCard}>
+                      <Text style={styles.productInfoLabel}>
+                        EXTRACTED PRODUCT INFO
+                      </Text>
+                      <Text style={styles.productInfoName}>
+                        {scannedResult.productInfo.product_name}
+                      </Text>
+                      <Text style={styles.productInfoBrand}>
+                        Brand: {scannedResult.productInfo.brand}
+                      </Text>
+                    </View>
+                  )}
+
                   <TouchableOpacity
-                    style={styles.primaryButton}
+                    style={[
+                      styles.primaryButton,
+                      isUploadingPhoto ? styles.buttonDisabled : null,
+                    ]}
                     onPress={handleStartScanning}
+                    disabled={isUploadingPhoto}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.primaryButtonText}>Scan Another</Text>
@@ -576,6 +631,62 @@ const styles = StyleSheet.create({
   },
   retakeLinkText: {
     color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  photoActionLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  retryUploadLinkText: {
+    color: '#A855F7',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  uploadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    gap: 10,
+  },
+  uploadingBannerText: {
+    color: '#E0F2FE',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  uploadErrorContainer: {
+    marginBottom: 14,
+  },
+  productInfoCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#22C55E',
+  },
+  productInfoLabel: {
+    color: '#4ADE80',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    marginBottom: 4,
+  },
+  productInfoName: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  productInfoBrand: {
+    color: '#94A3B8',
     fontSize: 13,
     fontWeight: '600',
   },

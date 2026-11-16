@@ -40,10 +40,11 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │   ├── hooks/
 │   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, and front photo attachment hook
 │   ├── types/
-│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, etc.)
+│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, etc.)
 │   └── utils/
 │       ├── barcodeStorage.ts           # Local device persistence for barcodes (scanned_barcodes.json) & photos (product_photos/)
-│       └── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
+│       ├── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
+│       └── productApi.ts               # Binary POST client (uploadProductPhotoBinary) sending photo bytes to /products/analyze-bytes
 ```
 
 ---

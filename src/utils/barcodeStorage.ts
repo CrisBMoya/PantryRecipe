@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import {
   BarcodeOriginStatus,
+  ProductInfo,
   ScannedBarcode,
   StoredBarcodeEntry,
 } from '../types/barcode';
@@ -170,3 +171,31 @@ export function saveFrontProductPhoto(
     entry: updatedEntry,
   };
 }
+
+/**
+ * Updates the stored barcode entry with extracted ProductInfo returned by the backend server.
+ */
+export function saveProductInfoForBarcode(
+  barcodeData: string,
+  productInfo: ProductInfo
+): StoredBarcodeEntry | null {
+  const normalizedData = barcodeData.trim();
+  const entries = loadStoredBarcodes();
+  const existingIndex = entries.findIndex(
+    (entry) => entry.data === normalizedData
+  );
+
+  if (existingIndex === -1) {
+    return null;
+  }
+
+  const updatedEntry: StoredBarcodeEntry = {
+    ...entries[existingIndex],
+    productInfo,
+  };
+  entries[existingIndex] = updatedEntry;
+  writeStoredBarcodes(entries);
+
+  return updatedEntry;
+}
+

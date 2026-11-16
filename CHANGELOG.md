@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.0] - 2026-11-16
+
+### Added
+- **Binary Product Photo Upload to Server (`src/utils/productApi.ts`, `src/hooks/useBarcodeScanner.ts`, `src/components/BarcodeScannerView.tsx`, `src/utils/barcodeStorage.ts`, `src/types/barcode.ts`):** Added `uploadProductPhotoBinary` using `expo-file-system` (`File.bytes()`) and `expo/fetch` to automatically send captured front product photographs as raw binary bytes (`POST /products/analyze-bytes`) to the FastAPI backend. Persists the extracted `ProductInfo` (`product_name`, `brand`) in `scanned_barcodes.json`, displays upload progress, retry controls, and extracted product details in the scanner UI, and logs the resolved server URL and port in the app console.
+
 ## [0.7.0] - 2026-11-16
 
 ### Changed
