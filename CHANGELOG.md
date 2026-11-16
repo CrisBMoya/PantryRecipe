@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.6.0] - 2026-11-16
+
+### Changed
+- **Structured Retail Product Image Extraction (`server/app/agents/`, `server/main.py`, `server/pyproject.toml`):** Updated the LangGraph agent workflow to read and base64-encode a local retail product image (`encode_image_data_url`, `build_image_human_message`) and enforce structured output via Pydantic (`ProductInfo` with `product_name` and `brand` fields) using `llm.with_structured_output(ProductInfo)`, printing the validated JSON object in `server/main.py`.
+
 ## [0.5.0] - 2026-11-16
 
 ### Added

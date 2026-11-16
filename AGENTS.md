@@ -13,8 +13,8 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 - **Mobile Entry Point:** `index.ts` -> `App.tsx` (Currently using standard root registration via `registerRootComponent(App)`. *Note: `expo-router` is NOT currently installed; do not import `expo-router` unless explicitly asked to migrate routing*).
 - **Camera & Barcode:** `expo-camera` (`CameraView`, `useCameraPermissions`).
 - **Local Storage:** `expo-file-system` (`File`, `Directory`, `Paths.document`) for persisting scanned barcodes (`scanned_barcodes.json`) and captured front product photos (`product_photos/`) on device for future API upload.
-- **Backend & Agent Framework (`server/`):** Python `>=3.14` managed with `uv`, `langgraph`, `langchain`, `langchain-google-genai` (default model `gemini-2.5-flash`), and `python-dotenv`.
-- **Backend Entry Point:** `server/main.py` -> `server/app/agents/graph.py`.
+- **Backend & Agent Framework (`server/`):** Python `>=3.14` managed with `uv`, `langgraph`, `langchain`, `langchain-google-genai` (default model `gemini-2.5-flash`), `pydantic`, and `python-dotenv`.
+- **Backend Entry Point:** `server/main.py` -> `server/app/agents/graph.py` (`run_product_image_agent`).
 
 ---
 
@@ -25,15 +25,15 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 ├── app.json                            # Expo config & native permissions (Android CAMERA)
 ├── server/                             # Python backend & LangGraph AI agent server (managed via UV)
 │   ├── .env                            # Local secrets (GOOGLE_API_KEY) — gitignored, never commit or log
-│   ├── pyproject.toml                  # Python project dependencies (langgraph, langchain, langchain-google-genai, python-dotenv)
+│   ├── pyproject.toml                  # Python project dependencies (langgraph, langchain, langchain-google-genai, pydantic, python-dotenv)
 │   ├── uv.lock                         # Locked UV dependency graph
-│   ├── main.py                         # Entry point for running the LangGraph agent flow
+│   ├── main.py                         # CLI entry point for running the product image extraction agent flow
 │   └── app/
 │       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY) & Gemini LLM factory (get_llm)
 │       └── agents/
-│           ├── state.py                # LangGraph AgentState definition
-│           ├── nodes.py                # LangGraph node functions (Gemini invocation)
-│           └── graph.py                # StateGraph builder & execution helpers
+│           ├── state.py                # LangGraph AgentState & ProductInfo Pydantic schema (product_name, brand)
+│           ├── nodes.py                # Multimodal image encoding & Gemini structured-output node functions
+│           └── graph.py                # StateGraph builder & execution helpers (build_product_agent_graph, run_product_image_agent)
 ├── src/
 │   ├── components/
 │   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result & front product photo capture UI
@@ -72,7 +72,8 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 5. **Python Server & LangGraph Conventions (`server/`):**
    - **External UV Virtual Environment:** Do NOT create a local `.venv` inside `server/`. Always target the existing virtual environment at `C:\Users\Tobal\virtual_environments\server\.venv\` by setting `UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"` when running `uv add`, `uv sync`, or `uv run`.
    - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
-   - **Modular Graph Architecture:** Keep LangGraph state definitions (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
+   - **Modular Graph Architecture:** Keep LangGraph state and Pydantic schemas (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
+   - **Structured Product Image Extraction:** Retail product packaging images are encoded as base64 data URLs (`encode_image_data_url` / `build_image_human_message` in `nodes.py`) and processed via `llm.with_structured_output(ProductInfo)` to guarantee valid JSON extraction of `product_name` and `brand`.
 
 ---
 
@@ -90,11 +91,11 @@ npm run android             # Start on Android device/emulator
 ### Python Backend (`server/`)
 - **Package & Environment Manager:** `uv` (Python >= 3.14).
 - **External Virtual Environment:** Located at `C:\Users\Tobal\virtual_environments\server\.venv\`. Always pass `--python "C:\Users\Tobal\virtual_environments\server\.venv"` or set `UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"` when running `uv` commands inside `server/`.
-- **LLM & Framework:** LangChain + LangGraph (`StateGraph`) using Gemini (`langchain-google-genai`) configured via `GOOGLE_API_KEY` in `server/.env`.
+- **LLM & Framework:** LangChain + LangGraph (`StateGraph`) using Gemini (`langchain-google-genai`) and Pydantic structured output (`ProductInfo`), configured via `GOOGLE_API_KEY` in `server/.env`.
 - **Running the Agent:**
   ```powershell
   cd server
   $env:UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"
-  uv run python main.py
+  uv run python main.py <path_to_product_image>
   ```
 

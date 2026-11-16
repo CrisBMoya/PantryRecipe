@@ -1,6 +1,12 @@
 """LangGraph agent workflows for PantryRecipe."""
 
-from app.agents.graph import build_hello_agent_graph, run_hello_agent
-from app.agents.state import AgentState
+from app.agents.graph import build_product_agent_graph, run_product_image_agent
+from app.agents.state import AgentState, ProductInfo
 
-__all__ = ["AgentState", "build_hello_agent_graph", "run_hello_agent"]
+__all__ = [
+    "AgentState",
+    "ProductInfo",
+    "build_product_agent_graph",
+    "run_product_image_agent",
+]
+
