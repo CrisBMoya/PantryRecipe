@@ -1,15 +1,20 @@
 # PantryRecipe — Agent & LLM Architecture Guide
 
-This is an **Expo SDK 58 / React Native 0.88 / TypeScript** mobile application (primarily targeting Android).
+This is a full-stack repository comprising:
+1. **Mobile Client (Root):** An **Expo SDK 58 / React Native 0.88 / TypeScript** mobile application (primarily targeting Android).
+2. **Backend & AI Agent Server (`server/`):** A **Python (>=3.14) / LangChain / LangGraph** server using **Google Gemini** (`langchain-google-genai`) and managed with **UV**.
+
 Because multiple LLMs and fresh sessions work on this repository, adhere strictly to the architectural boundaries and invariants below.
 
 ---
 
-## 1. Tech Stack & Entry Point
-- **Framework:** Expo (`~58.0.25`), React 19 (`19.3.0`), React Native (`0.88.1`), TypeScript (`~6.0.3`).
-- **Entry Point:** `index.ts` -> `App.tsx` (Currently using standard root registration via `registerRootComponent(App)`. *Note: `expo-router` is NOT currently installed; do not import `expo-router` unless explicitly asked to migrate routing*).
+## 1. Tech Stack & Entry Points
+- **Mobile Framework:** Expo (`~58.0.25`), React 19 (`19.3.0`), React Native (`0.88.1`), TypeScript (`~6.0.3`).
+- **Mobile Entry Point:** `index.ts` -> `App.tsx` (Currently using standard root registration via `registerRootComponent(App)`. *Note: `expo-router` is NOT currently installed; do not import `expo-router` unless explicitly asked to migrate routing*).
 - **Camera & Barcode:** `expo-camera` (`CameraView`, `useCameraPermissions`).
 - **Local Storage:** `expo-file-system` (`File`, `Directory`, `Paths.document`) for persisting scanned barcodes (`scanned_barcodes.json`) and captured front product photos (`product_photos/`) on device for future API upload.
+- **Backend & Agent Framework (`server/`):** Python `>=3.14` managed with `uv`, `langgraph`, `langchain`, `langchain-google-genai` (default model `gemini-2.5-flash`), and `python-dotenv`.
+- **Backend Entry Point:** `server/main.py` -> `server/app/agents/graph.py`.
 
 ---
 
@@ -19,10 +24,12 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 ├── App.tsx                             # Root application component & screen host
 ├── app.json                            # Expo config & native permissions (Android CAMERA)
 ├── server/                             # Python backend & LangGraph AI agent server (managed via UV)
+│   ├── .env                            # Local secrets (GOOGLE_API_KEY) — gitignored, never commit or log
 │   ├── pyproject.toml                  # Python project dependencies (langgraph, langchain, langchain-google-genai, python-dotenv)
+│   ├── uv.lock                         # Locked UV dependency graph
 │   ├── main.py                         # Entry point for running the LangGraph agent flow
 │   └── app/
-│       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY) & Gemini LLM factory
+│       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY) & Gemini LLM factory (get_llm)
 │       └── agents/
 │           ├── state.py                # LangGraph AgentState definition
 │           ├── nodes.py                # LangGraph node functions (Gemini invocation)
@@ -61,6 +68,11 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 
 4. **Continuous Native Generation (CNG):**
    - `android/` and `ios/` directories are generated on demand. Configure permissions and plugins in `app.json` rather than editing native folders directly.
+
+5. **Python Server & LangGraph Conventions (`server/`):**
+   - **External UV Virtual Environment:** Do NOT create a local `.venv` inside `server/`. Always target the existing virtual environment at `C:\Users\Tobal\virtual_environments\server\.venv\` by setting `UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"` when running `uv add`, `uv sync`, or `uv run`.
+   - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
+   - **Modular Graph Architecture:** Keep LangGraph state definitions (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
 
 ---
 
