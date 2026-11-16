@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from app.agents.nodes import build_image_human_message, call_gemini_node
+from app.agents.nodes import (
+    DEFAULT_IMAGE_MIME_TYPE,
+    build_image_human_message,
+    call_gemini_node,
+    normalize_image_mime_type,
+)
 from app.agents.state import AgentState, ProductInfo
 
 
@@ -23,13 +26,36 @@ def build_product_agent_graph() -> CompiledStateGraph:
     return workflow.compile()
 
 
-def run_product_image_agent(image_path: str | Path) -> ProductInfo:
-    """Execute the product image extraction graph on a local image and return ProductInfo."""
+def run_product_image_agent(
+    image_bytes: bytes,
+    mime_type: str | None = DEFAULT_IMAGE_MIME_TYPE,
+) -> ProductInfo:
+    """Execute the product image extraction graph on binary image data and return ProductInfo."""
+    resolved_mime = normalize_image_mime_type(mime_type)
     graph = build_product_agent_graph()
-    human_message = build_image_human_message(image_path)
+    human_message = build_image_human_message(image_bytes, mime_type=resolved_mime)
     result = graph.invoke(
         {
-            "image_path": str(image_path),
+            "image_bytes": image_bytes,
+            "mime_type": resolved_mime,
+            "messages": [human_message],
+        }
+    )
+    return result["product_info"]
+
+
+async def arun_product_image_agent(
+    image_bytes: bytes,
+    mime_type: str | None = DEFAULT_IMAGE_MIME_TYPE,
+) -> ProductInfo:
+    """Asynchronously execute the product image extraction graph on binary image data."""
+    resolved_mime = normalize_image_mime_type(mime_type)
+    graph = build_product_agent_graph()
+    human_message = build_image_human_message(image_bytes, mime_type=resolved_mime)
+    result = await graph.ainvoke(
+        {
+            "image_bytes": image_bytes,
+            "mime_type": resolved_mime,
             "messages": [human_message],
         }
     )

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.7.0] - 2026-11-16
+
+### Changed
+- **FastAPI Server & Binary Image Agent Ingestion (`server/main.py`, `server/app/agents/`, `server/pyproject.toml`, `AGENTS.md`):** Transformed the Python server into a FastAPI application served via Uvicorn (`fastapi`, `uvicorn`, `python-multipart`). Refactored the LangGraph product extraction workflow (`AgentState`, `encode_image_data_url`, `build_image_human_message`, `run_product_image_agent`, `arun_product_image_agent`) to accept raw binary image bytes (`image_bytes`, `mime_type`) instead of local file paths, exposing `POST /products/analyze` (multipart file upload), `POST /products/analyze-bytes` (raw binary body), and `GET /health`.
+
 ## [0.6.0] - 2026-11-16
 
 ### Changed

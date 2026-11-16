@@ -27,6 +27,7 @@ class AgentState(TypedDict, total=False):
     """State passed between nodes in the LangGraph product extraction workflow."""
 
     messages: Annotated[list[AnyMessage], add_messages]
-    image_path: str
+    image_bytes: bytes
+    mime_type: str
     product_info: ProductInfo
 
