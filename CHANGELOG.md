@@ -7,6 +7,9 @@ All notable changes to this project are documented in this file.
 ### Added
 - **Saved Products Viewer & Deletion (`src/components/BarcodeScannerView.tsx`, `src/hooks/useBarcodeScanner.ts`, `src/utils/barcodeStorage.ts`, `src/types/barcode.ts`):** Added a **Saved Products** button and modal list displaying all items stored in `scanned_barcodes.json`, including each item's extracted Product Name (`product_name`), Brand (`brand`), scanned barcode, and front photo thumbnail. Updated `saveProductInfoForBarcode` and `loadStoredBarcodes` so `product_name` and `brand` returned by the server are stored directly alongside the barcode in `scanned_barcodes.json`. Added `deleteStoredBarcode` and UI delete buttons to remove products from `scanned_barcodes.json`.
 
+### Fixed
+- **Post-Scan Navigation UX (`src/components/BarcodeScannerView.tsx`):** Added a **Back** button (`resetScanner`) on the scanned product result card (for both `new` and `old` codes), on the front-photo capture prompt, and during active scanning, along with Android hardware Back button handling (`BackHandler`), so users can return directly to the main idle screen to choose between scanning another barcode or viewing the **Saved Products** list.
+
 ## [0.8.0] - 2026-11-16
 
 ### Added

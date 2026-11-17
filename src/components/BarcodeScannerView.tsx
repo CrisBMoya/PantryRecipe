@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  BackHandler,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
@@ -54,6 +55,7 @@ export function BarcodeScannerView({
     storedBarcodes,
     handleBarcodeScanned,
     startScanning,
+    resetScanner,
     attachFrontPhoto,
     uploadFrontPhoto,
     refreshStoredBarcodes,
@@ -80,6 +82,36 @@ export function BarcodeScannerView({
     setIsRetakingPhoto(false);
     startScanning();
   };
+
+  const handleBackToHome = () => {
+    setPhotoError(null);
+    setIsRetakingPhoto(false);
+    resetScanner();
+  };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (isSavedModalVisible) {
+          setIsSavedModalVisible(false);
+          return true;
+        }
+        if (isRetakingPhoto) {
+          setIsRetakingPhoto(false);
+          return true;
+        }
+        if (scannedResult || isScanning) {
+          setPhotoError(null);
+          setIsRetakingPhoto(false);
+          resetScanner();
+          return true;
+        }
+        return false;
+      }
+    );
+    return () => subscription.remove();
+  }, [isSavedModalVisible, isRetakingPhoto, scannedResult, isScanning, resetScanner]);
 
   const handleOpenSavedModal = () => {
     refreshStoredBarcodes();
@@ -240,21 +272,23 @@ export function BarcodeScannerView({
           </Text>
         </View>
 
-        <View style={styles.reticleContainer} pointerEvents="none">
-          <View
-            style={[
-              styles.reticle,
-              isAwaitingFrontPhoto ? styles.reticlePhotoFrame : null,
-              !isScanning && !scannedResult ? styles.reticleIdle : null,
-              isScanning && verifyingProgress > 0 && !scannedResult
-                ? styles.reticleVerifying
-                : null,
-              scannedResult && !isAwaitingFrontPhoto
-                ? styles.reticleActive
-                : null,
-            ]}
-          />
-        </View>
+        {(!scannedResult || isAwaitingFrontPhoto) && (
+          <View style={styles.reticleContainer} pointerEvents="none">
+            <View
+              style={[
+                styles.reticle,
+                isAwaitingFrontPhoto ? styles.reticlePhotoFrame : null,
+                !isScanning && !scannedResult ? styles.reticleIdle : null,
+                isScanning && verifyingProgress > 0 && !scannedResult
+                  ? styles.reticleVerifying
+                  : null,
+                scannedResult && !isAwaitingFrontPhoto
+                  ? styles.reticleActive
+                  : null,
+              ]}
+            />
+          </View>
+        )}
 
         <View style={styles.footer}>
           {scannedResult ? (
@@ -327,16 +361,20 @@ export function BarcodeScannerView({
                     )}
                   </TouchableOpacity>
 
-                  {isRetakingPhoto && (
-                    <TouchableOpacity
-                      style={styles.secondaryButton}
-                      onPress={() => setIsRetakingPhoto(false)}
-                      disabled={isTakingPhoto}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.secondaryButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={
+                      isRetakingPhoto
+                        ? () => setIsRetakingPhoto(false)
+                        : handleBackToHome
+                    }
+                    disabled={isTakingPhoto}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {isRetakingPhoto ? 'Cancel' : 'Back'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <>
@@ -435,11 +473,11 @@ export function BarcodeScannerView({
                         styles.primaryButton,
                         isUploadingPhoto ? styles.buttonDisabled : null,
                       ]}
-                      onPress={handleStartScanning}
+                      onPress={handleBackToHome}
                       disabled={isUploadingPhoto}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.primaryButtonText}>Scan Another</Text>
+                      <Text style={styles.primaryButtonText}>Back</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -460,32 +498,43 @@ export function BarcodeScannerView({
               )}
             </View>
           ) : isScanning ? (
-            <View style={styles.statusPill}>
-              <Text style={styles.statusPillText}>
-                {verifyingProgress > 0
-                  ? `Confirming read (${verifyingProgress}/${requiredReads})...`
-                  : 'Scanning for barcodes...'}
-              </Text>
-            </View>
+            <>
+              <View style={styles.statusPill}>
+                <Text style={styles.statusPillText}>
+                  {verifyingProgress > 0
+                    ? `Confirming read (${verifyingProgress}/${requiredReads})...`
+                    : 'Scanning for barcodes...'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleBackToHome}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryButtonText}>Back</Text>
+              </TouchableOpacity>
+            </>
           ) : (
-            <TouchableOpacity
-              style={styles.scanActionButton}
-              onPress={handleStartScanning}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryButtonText}>Scan Barcode</Text>
-            </TouchableOpacity>
-          )}
+            <>
+              <TouchableOpacity
+                style={styles.scanActionButton}
+                onPress={handleStartScanning}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.primaryButtonText}>Scan Barcode</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.savedProductsButton}
-            onPress={handleOpenSavedModal}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.savedProductsButtonText}>
-              Saved Products ({storedBarcodes.length})
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.savedProductsButton}
+                onPress={handleOpenSavedModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.savedProductsButtonText}>
+                  Saved Products ({storedBarcodes.length})
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </SafeAreaView>
 
