@@ -29,5 +29,6 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     image_bytes: bytes
     mime_type: str
+    barcode: str | None
     product_info: ProductInfo
 

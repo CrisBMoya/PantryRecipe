@@ -66,10 +66,11 @@ export function resolveServerBaseUrl(overrideBaseUrl?: string): string {
 
 /**
  * Reads a local product photograph as binary data and sends it via HTTP POST
- * to `POST /products/analyze-bytes` on the FastAPI backend.
+ * to `POST /products/analyze-bytes` on the FastAPI backend along with the scanned barcode.
  */
 export async function uploadProductPhotoBinary(
   photoUri: string,
+  barcode: string,
   serverBaseUrl?: string
 ): Promise<ProductInfo> {
   const file = new FsFile(photoUri);
@@ -83,15 +84,16 @@ export async function uploadProductPhotoBinary(
     throw new Error('Captured product photo file is empty.');
   }
 
+  const normalizedBarcode = barcode.trim();
   const baseUrl = resolveServerBaseUrl(serverBaseUrl);
-  const endpoint = `${baseUrl}${ANALYZE_BYTES_PATH}`;
+  const endpoint = `${baseUrl}${ANALYZE_BYTES_PATH}?barcode=${encodeURIComponent(normalizedBarcode)}`;
   const parsedUrl = new URL(baseUrl);
   const port =
     parsedUrl.port ||
     (parsedUrl.protocol === 'https:' ? '443' : String(DEFAULT_SERVER_PORT));
 
   console.log(
-    `[ProductAPI] Sending binary image (${imageBytes.byteLength} bytes, ${mimeType}) -> Server: ${baseUrl} (Port: ${port}) | Endpoint: ${endpoint}`
+    `[ProductAPI] Sending binary image (${imageBytes.byteLength} bytes, ${mimeType}) + barcode (${normalizedBarcode}) -> Server: ${baseUrl} (Port: ${port}) | Endpoint: ${endpoint}`
   );
 
   const response = await fetch(endpoint, {
@@ -99,6 +101,7 @@ export async function uploadProductPhotoBinary(
     headers: {
       'Content-Type': mimeType,
       Accept: 'application/json',
+      'X-Barcode': normalizedBarcode,
     },
     body: imageBytes,
   });

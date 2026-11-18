@@ -141,6 +141,7 @@ export function useBarcodeScanner(
       try {
         const productInfo = await uploadProductPhotoBinary(
           targetUri,
+          targetBarcodeData,
           serverBaseUrl
         );
         saveProductInfoForBarcode(targetBarcodeData, productInfo);

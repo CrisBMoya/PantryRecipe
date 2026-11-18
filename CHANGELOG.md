@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.0] - 2026-11-18
+
+### Changed
+- **Barcode Transmission with Product Image Upload (`src/utils/productApi.ts`, `src/hooks/useBarcodeScanner.ts`, `server/main.py`, `server/app/agents/state.py`, `server/app/agents/graph.py`):** Updated `uploadProductPhotoBinary` to send the scanned `barcode` alongside the raw image bytes via the `?barcode=` query parameter and `X-Barcode` header to `POST /products/analyze-bytes`. Updated the FastAPI endpoints (`/products/analyze-bytes` and `/products/analyze`) and LangGraph workflow (`AgentState`, `run_product_image_agent`, `arun_product_image_agent`) to accept and store `barcode` in state for future server-side processing.
+- **Server-Side Product & Barcode Logging (`server/main.py`, `server/app/agents/nodes.py`):** Added structured `INFO` logging on the server to log `barcode`, `product_name`, and `brand` when product packaging images are analyzed.
+
 ## [0.9.0] - 2026-11-16
 
 ### Added

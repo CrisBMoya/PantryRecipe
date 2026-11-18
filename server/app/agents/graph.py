@@ -29,6 +29,7 @@ def build_product_agent_graph() -> CompiledStateGraph:
 def run_product_image_agent(
     image_bytes: bytes,
     mime_type: str | None = DEFAULT_IMAGE_MIME_TYPE,
+    barcode: str | None = None,
 ) -> ProductInfo:
     """Execute the product image extraction graph on binary image data and return ProductInfo."""
     resolved_mime = normalize_image_mime_type(mime_type)
@@ -38,6 +39,7 @@ def run_product_image_agent(
         {
             "image_bytes": image_bytes,
             "mime_type": resolved_mime,
+            "barcode": barcode,
             "messages": [human_message],
         }
     )
@@ -47,6 +49,7 @@ def run_product_image_agent(
 async def arun_product_image_agent(
     image_bytes: bytes,
     mime_type: str | None = DEFAULT_IMAGE_MIME_TYPE,
+    barcode: str | None = None,
 ) -> ProductInfo:
     """Asynchronously execute the product image extraction graph on binary image data."""
     resolved_mime = normalize_image_mime_type(mime_type)
@@ -56,6 +59,7 @@ async def arun_product_image_agent(
         {
             "image_bytes": image_bytes,
             "mime_type": resolved_mime,
+            "barcode": barcode,
             "messages": [human_message],
         }
     )

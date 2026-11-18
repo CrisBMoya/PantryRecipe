@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import base64
+import logging
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.agents.state import AgentState, ProductInfo
 from app.config import get_llm
+
+logger = logging.getLogger("uvicorn.error")
 
 SYSTEM_PROMPT = (
     "You are a retail product vision extraction assistant for PantryRecipe. "
@@ -73,6 +76,14 @@ def call_gemini_node(state: AgentState) -> dict:
 
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state_messages]
     extracted: ProductInfo = structured_llm.invoke(messages)
+
+    barcode = state.get("barcode")
+    logger.info(
+        "[ProductAgent] Extracted product info | barcode=%s | product_name=%r | brand=%r",
+        barcode,
+        extracted.product_name,
+        extracted.brand,
+    )
 
     return {
         "product_info": extracted,
