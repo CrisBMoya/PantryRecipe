@@ -5,6 +5,7 @@ export type BarcodeOriginStatus = 'new' | 'old';
 export interface ProductInfo {
   product_name: string;
   brand: string;
+  search_result?: string;
 }
 
 export interface ScannedBarcode {
@@ -15,6 +16,7 @@ export interface ScannedBarcode {
   frontPhotoUri?: string;
   product_name?: string;
   brand?: string;
+  search_result?: string;
   productInfo?: ProductInfo;
 }
 
@@ -27,6 +29,7 @@ export interface StoredBarcodeEntry {
   frontPhotoUri?: string;
   product_name?: string;
   brand?: string;
+  search_result?: string;
   productInfo?: ProductInfo;
 }
 

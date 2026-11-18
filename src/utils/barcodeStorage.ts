@@ -51,11 +51,20 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
         ? item.productInfo.brand.trim()
         : undefined;
 
+  const searchResult =
+    typeof item.search_result === 'string' && item.search_result.trim()
+      ? item.search_result.trim()
+      : typeof item.productInfo?.search_result === 'string' &&
+          item.productInfo.search_result.trim()
+        ? item.productInfo.search_result.trim()
+        : undefined;
+
   const productInfo: ProductInfo | undefined =
-    productName !== undefined || brand !== undefined
+    productName !== undefined || brand !== undefined || searchResult !== undefined
       ? {
           product_name: productName ?? '',
           brand: brand ?? '',
+          ...(searchResult !== undefined ? { search_result: searchResult } : {}),
         }
       : undefined;
 
@@ -63,6 +72,7 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
     ...item,
     ...(productName !== undefined ? { product_name: productName } : {}),
     ...(brand !== undefined ? { brand } : {}),
+    ...(searchResult !== undefined ? { search_result: searchResult } : {}),
     ...(productInfo ? { productInfo } : {}),
   };
 }
@@ -225,15 +235,27 @@ export function saveProductInfoForBarcode(
     return null;
   }
 
+  const normalizedSearchResult =
+    typeof productInfo.search_result === 'string' &&
+    productInfo.search_result.trim()
+      ? productInfo.search_result.trim()
+      : undefined;
+
   const normalizedProductInfo: ProductInfo = {
     product_name: productInfo.product_name.trim(),
     brand: productInfo.brand.trim(),
+    ...(normalizedSearchResult !== undefined
+      ? { search_result: normalizedSearchResult }
+      : {}),
   };
 
   const updatedEntry: StoredBarcodeEntry = {
     ...entries[existingIndex],
     product_name: normalizedProductInfo.product_name,
     brand: normalizedProductInfo.brand,
+    ...(normalizedSearchResult !== undefined
+      ? { search_result: normalizedSearchResult }
+      : {}),
     productInfo: normalizedProductInfo,
   };
   entries[existingIndex] = updatedEntry;

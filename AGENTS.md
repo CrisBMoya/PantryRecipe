@@ -29,10 +29,10 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │   ├── uv.lock                         # Locked UV dependency graph
 │   ├── main.py                         # FastAPI application entry point exposing product image extraction endpoints
 │   └── app/
-│       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY) & Gemini LLM factory (get_llm)
+│       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY), Gemini LLM factory (get_llm), & GenAI SDK client factory (get_genai_client)
 │       └── agents/
-│           ├── state.py                # LangGraph AgentState (image_bytes, mime_type) & ProductInfo Pydantic schema (product_name, brand)
-│           ├── nodes.py                # Binary image base64 encoding & Gemini structured-output node functions
+│           ├── state.py                # LangGraph AgentState & Pydantic schemas (ProductExtraction, ProductInfo with product_name, brand, search_result)
+│           ├── nodes.py                # Binary image base64 encoding, Gemini vision structured-output node (call_gemini_node), & grounded web search node (web_search_node)
 │           └── graph.py                # StateGraph builder & execution helpers (build_product_agent_graph, run_product_image_agent, arun_product_image_agent)
 ├── src/
 │   ├── components/
@@ -63,7 +63,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - Every verified barcode is checked against `Paths.document/scanned_barcodes.json` via `checkAndSaveBarcode` (`src/utils/barcodeStorage.ts`) and tagged with `status: 'new' | 'old'`.
    - When a barcode is `'new'` (or missing `frontPhotoUri`), `BarcodeScannerView` prompts the user to capture a **Front product photo** using `CameraView.takePictureAsync`.
    - Captured photos must be copied from temporary camera cache into persistent storage (`Paths.document/product_photos/<barcode>_front_<timestamp>.jpg`) via `saveFrontProductPhoto` / `attachFrontPhoto`, updating `frontPhotoUri` on the stored entry so it remains available for future API uploads to the backend server.
-   - When the server extracts `ProductInfo` (`product_name` and `brand`), `saveProductInfoForBarcode` persists both `product_name` and `brand` directly alongside the barcode in `scanned_barcodes.json` (as well as inside `productInfo`), and `deleteStoredBarcode` removes an entry and its associated photo file from local storage.
+   - When the server extracts `ProductInfo` (`product_name`, `brand`, and `search_result`), `saveProductInfoForBarcode` persists `product_name`, `brand`, and `search_result` directly alongside the barcode in `scanned_barcodes.json` (as well as inside `productInfo`), and `deleteStoredBarcode` removes an entry and its associated photo file from local storage.
 
 3. **React Native 0.88+ StyleSheet Compatibility:**
    - Use `...StyleSheet.absoluteFill` (NOT `StyleSheet.absoluteFillObject`, which is removed from RN 0.88 type definitions).
@@ -73,9 +73,9 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 
 5. **Python Server & LangGraph Conventions (`server/`):**
    - **External UV Virtual Environment:** Do NOT create a local `.venv` inside `server/`. Always target the existing virtual environment at `C:\Users\Tobal\virtual_environments\server\.venv\` by setting `UV_PROJECT_ENVIRONMENT="C:\Users\Tobal\virtual_environments\server\.venv"` when running `uv add`, `uv sync`, or `uv run`.
-   - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
+   - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` or `get_genai_client()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
    - **Modular Graph Architecture:** Keep LangGraph state and Pydantic schemas (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
-   - **Structured Product Image Extraction:** Retail product packaging images are passed as binary image bytes (`image_bytes`, `mime_type`), encoded as base64 data URLs (`encode_image_data_url` / `build_image_human_message` in `nodes.py`), and processed via `llm.with_structured_output(ProductInfo)` to guarantee valid JSON extraction of `product_name` and `brand`.
+   - **Structured Product Image Extraction & Grounded Web Search:** Retail product packaging images are passed as binary image bytes (`image_bytes`, `mime_type`), encoded as base64 data URLs (`encode_image_data_url` / `build_image_human_message` in `nodes.py`), and processed via `llm.with_structured_output(ProductExtraction)` in `call_gemini_node` to guarantee valid JSON extraction of `product_name` and `brand`. The graph then runs `web_search_node`, which conducts a grounded search using `client.interactions.create(model="gemini-4-hydrogen", input=..., tools=[{"type": "google_search"}])` and reads `interaction.output_text` (per `GEMINI_SEARCH_SPEC.md`), logging the results and returning `ProductInfo` (`product_name`, `brand`, `search_result`).
 
 ---
 

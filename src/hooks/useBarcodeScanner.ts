@@ -156,6 +156,7 @@ export function useBarcodeScanner(
             frontPhotoUri: targetUri,
             product_name: productInfo.product_name,
             brand: productInfo.brand,
+            search_result: productInfo.search_result,
             productInfo,
           };
           onScanned?.(updated);
@@ -196,6 +197,7 @@ export function useBarcodeScanner(
           frontPhotoUri: savedPhotoUri,
           product_name: undefined,
           brand: undefined,
+          search_result: undefined,
           productInfo: undefined,
         };
         console.log(
@@ -257,6 +259,8 @@ export function useBarcodeScanner(
           frontPhotoUri: entry.frontPhotoUri,
           product_name: entry.product_name ?? entry.productInfo?.product_name,
           brand: entry.brand ?? entry.productInfo?.brand,
+          search_result:
+            entry.search_result ?? entry.productInfo?.search_result,
           productInfo: entry.productInfo,
         };
         console.log(

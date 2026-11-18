@@ -73,8 +73,10 @@ export function BarcodeScannerView({
     scannedResult?.product_name ?? scannedResult?.productInfo?.product_name;
   const scannedProductBrand =
     scannedResult?.brand ?? scannedResult?.productInfo?.brand;
+  const scannedSearchResult =
+    scannedResult?.search_result ?? scannedResult?.productInfo?.search_result;
   const hasScannedProductInfo = Boolean(
-    scannedProductName || scannedProductBrand
+    scannedProductName || scannedProductBrand || scannedSearchResult
   );
 
   const handleStartScanning = () => {
@@ -159,6 +161,8 @@ export function BarcodeScannerView({
       item.product_name ?? item.productInfo?.product_name ?? 'Not extracted yet';
     const brandName =
       item.brand ?? item.productInfo?.brand ?? 'Not extracted yet';
+    const searchResult =
+      item.search_result ?? item.productInfo?.search_result;
 
     return (
       <View style={styles.savedItemCard}>
@@ -194,6 +198,17 @@ export function BarcodeScannerView({
             </View>
           </View>
         </View>
+
+        {searchResult ? (
+          <View style={styles.savedItemSearchSection}>
+            <Text style={styles.savedItemSearchLabel}>
+              WEB SEARCH DETAILS
+            </Text>
+            <Text style={styles.savedItemSearchText} numberOfLines={4}>
+              {searchResult}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.savedItemFooterRow}>
           <Text style={styles.savedItemMetaText}>
@@ -464,6 +479,14 @@ export function BarcodeScannerView({
                       <Text style={styles.productInfoBrand}>
                         Brand: {scannedProductBrand || 'Unknown Brand'}
                       </Text>
+                      {scannedSearchResult ? (
+                        <Text
+                          style={styles.productInfoSearchResult}
+                          numberOfLines={4}
+                        >
+                          {scannedSearchResult}
+                        </Text>
+                      ) : null}
                     </View>
                   )}
 
@@ -898,6 +921,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  productInfoSearchResult: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 8,
+  },
   permissionCard: {
     backgroundColor: '#1E293B',
     borderRadius: 20,
@@ -1115,6 +1144,25 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 10,
     fontWeight: '700',
+  },
+  savedItemSearchSection: {
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 4,
+  },
+  savedItemSearchLabel: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  savedItemSearchText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    lineHeight: 17,
   },
   savedItemFooterRow: {
     flexDirection: 'row',

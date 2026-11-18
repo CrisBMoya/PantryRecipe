@@ -9,8 +9,8 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
-class ProductInfo(BaseModel):
-    """Structured data extracted from retail product packaging."""
+class ProductExtraction(BaseModel):
+    """Structured data extracted from retail product packaging by the vision model."""
 
     product_name: str = Field(
         description=(
@@ -23,6 +23,15 @@ class ProductInfo(BaseModel):
     )
 
 
+class ProductInfo(ProductExtraction):
+    """Product metadata and grounded web search details returned by the agent workflow."""
+
+    search_result: str | None = Field(
+        default=None,
+        description="Product details, contents, and usage summary extracted via Gemini web search.",
+    )
+
+
 class AgentState(TypedDict, total=False):
     """State passed between nodes in the LangGraph product extraction workflow."""
 
@@ -31,4 +40,6 @@ class AgentState(TypedDict, total=False):
     mime_type: str
     barcode: str | None
     product_info: ProductInfo
+    search_query: str
+    search_result: str
 

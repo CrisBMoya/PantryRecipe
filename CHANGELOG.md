@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.0] - 2026-11-18
+
+### Added
+- **Grounded Gemini Web Search Node (`server/app/config.py`, `server/app/agents/state.py`, `server/app/agents/nodes.py`, `server/app/agents/graph.py`):** Implemented the Gemini web search specification (`GEMINI_SEARCH_SPEC.md`) in the LangGraph workflow (`START -> "agent" -> "web_search" -> END`). After a product's `product_name` and `brand` are extracted from packaging images, `web_search_node` invokes `client.interactions.create(model="gemini-4-hydrogen", input=..., tools=[{"type": "google_search"}])`, extracts `interaction.output_text`, logs the product details and usage in the server logs, and attaches `search_result` to `ProductInfo`.
+- **Client-Side Web Search Persistence (`src/types/barcode.ts`, `src/utils/productApi.ts`, `src/utils/barcodeStorage.ts`, `src/hooks/useBarcodeScanner.ts`, `src/components/BarcodeScannerView.tsx`):** Updated the Android client to receive `search_result` from `/products/analyze-bytes`, store it in `scanned_barcodes.json` alongside the barcode, `product_name`, and `brand`, and render the extracted web search details on the scanned product result card and in the **Saved Products** modal.
+
 ## [0.10.0] - 2026-11-18
 
 ### Changed

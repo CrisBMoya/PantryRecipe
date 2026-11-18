@@ -10,6 +10,7 @@ from app.agents.nodes import (
     build_image_human_message,
     call_gemini_node,
     normalize_image_mime_type,
+    web_search_node,
 )
 from app.agents.state import AgentState, ProductInfo
 
@@ -19,9 +20,11 @@ def build_product_agent_graph() -> CompiledStateGraph:
     workflow = StateGraph(AgentState)
 
     workflow.add_node("agent", call_gemini_node)
+    workflow.add_node("web_search", web_search_node)
 
     workflow.add_edge(START, "agent")
-    workflow.add_edge("agent", END)
+    workflow.add_edge("agent", "web_search")
+    workflow.add_edge("web_search", END)
 
     return workflow.compile()
 

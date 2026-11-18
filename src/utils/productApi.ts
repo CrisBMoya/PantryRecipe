@@ -127,8 +127,14 @@ export async function uploadProductPhotoBinary(
     throw new Error('Invalid product info response from server.');
   }
 
+  const searchResult =
+    typeof data.search_result === 'string' && data.search_result.trim()
+      ? data.search_result.trim()
+      : undefined;
+
   return {
     product_name: data.product_name,
     brand: data.brand,
+    ...(searchResult !== undefined ? { search_result: searchResult } : {}),
   };
 }
