@@ -11,6 +11,9 @@ import {
   FlatList,
   ScrollView,
   BackHandler,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
@@ -51,6 +54,13 @@ export function BarcodeScannerView({
     useState<boolean>(false);
   const [isSelectProductsModalVisible, setIsSelectProductsModalVisible] =
     useState<boolean>(false);
+  const [isAddManualModalVisible, setIsAddManualModalVisible] =
+    useState<boolean>(false);
+  const [manualProductName, setManualProductName] = useState<string>('');
+  const [manualProductBrand, setManualProductBrand] = useState<string>('');
+  const [manualProductDescription, setManualProductDescription] =
+    useState<string>('');
+  const [manualFormError, setManualFormError] = useState<string | null>(null);
   const [selectedBarcodeIds, setSelectedBarcodeIds] = useState<string[]>([]);
   const [lastSentCount, setLastSentCount] = useState<number | null>(null);
 
@@ -74,6 +84,7 @@ export function BarcodeScannerView({
     sendStoredBarcodesToServer,
     refreshStoredBarcodes,
     removeStoredBarcode,
+    createManualProduct,
   } = useBarcodeScanner(config, onScanned);
 
   const barcodeTypes = (
@@ -111,6 +122,10 @@ export function BarcodeScannerView({
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (isAddManualModalVisible) {
+          setIsAddManualModalVisible(false);
+          return true;
+        }
         if (isRecipeModalVisible) {
           setIsRecipeModalVisible(false);
           return true;
@@ -142,6 +157,7 @@ export function BarcodeScannerView({
     );
     return () => subscription.remove();
   }, [
+    isAddManualModalVisible,
     isRecipeModalVisible,
     isSelectProductsModalVisible,
     isSendOptionsModalVisible,
@@ -151,6 +167,54 @@ export function BarcodeScannerView({
     isScanning,
     resetScanner,
   ]);
+
+  const handleOpenAddManualModal = () => {
+    setManualProductName('');
+    setManualProductBrand('');
+    setManualProductDescription('');
+    setManualFormError(null);
+    setIsAddManualModalVisible(true);
+  };
+
+  const handleCloseAddManualModal = () => {
+    setManualFormError(null);
+    setIsAddManualModalVisible(false);
+  };
+
+  const handleSaveManualProduct = () => {
+    const trimmedName = manualProductName.trim();
+    const trimmedBrand = manualProductBrand.trim();
+    const trimmedDescription = manualProductDescription.trim();
+
+    if (!trimmedName) {
+      setManualFormError('Please enter a product name.');
+      return;
+    }
+
+    if (!trimmedBrand) {
+      setManualFormError('Please enter a product brand.');
+      return;
+    }
+
+    if (!trimmedDescription) {
+      setManualFormError('Please enter a product description.');
+      return;
+    }
+
+    const newEntry = createManualProduct({
+      product_name: trimmedName,
+      brand: trimmedBrand,
+      description: trimmedDescription,
+    });
+    setSelectedBarcodeIds((prev) =>
+      prev.includes(newEntry.data) ? prev : [...prev, newEntry.data]
+    );
+    setManualProductName('');
+    setManualProductBrand('');
+    setManualProductDescription('');
+    setManualFormError(null);
+    setIsAddManualModalVisible(false);
+  };
 
   const handlePressSendBarcodesButton = () => {
     const latest = refreshStoredBarcodes();
@@ -266,8 +330,12 @@ export function BarcodeScannerView({
       item.product_name ?? item.productInfo?.product_name ?? 'Not extracted yet';
     const brandName =
       item.brand ?? item.productInfo?.brand ?? 'Not extracted yet';
-    const searchResult =
-      item.search_result ?? item.productInfo?.search_result;
+    const descriptionOrSearch =
+      item.description ??
+      item.productInfo?.description ??
+      item.search_result ??
+      item.productInfo?.search_result;
+    const isManual = item.type === 'manual';
 
     return (
       <View style={styles.savedItemCard}>
@@ -280,7 +348,9 @@ export function BarcodeScannerView({
             />
           ) : (
             <View style={styles.savedItemPlaceholderThumb}>
-              <Text style={styles.savedItemPlaceholderText}>NO PHOTO</Text>
+              <Text style={styles.savedItemPlaceholderText}>
+                {isManual ? 'MANUAL' : 'NO PHOTO'}
+              </Text>
             </View>
           )}
 
@@ -304,20 +374,20 @@ export function BarcodeScannerView({
           </View>
         </View>
 
-        {searchResult ? (
+        {descriptionOrSearch ? (
           <View style={styles.savedItemSearchSection}>
             <Text style={styles.savedItemSearchLabel}>
-              WEB SEARCH DETAILS
+              {isManual ? 'PRODUCT DESCRIPTION' : 'WEB SEARCH DETAILS'}
             </Text>
             <Text style={styles.savedItemSearchText} numberOfLines={4}>
-              {searchResult}
+              {descriptionOrSearch}
             </Text>
           </View>
         ) : null}
 
         <View style={styles.savedItemFooterRow}>
           <Text style={styles.savedItemMetaText}>
-            Scanned {item.scanCount ?? 1}x
+            {isManual ? 'Added manually' : `Scanned ${item.scanCount ?? 1}x`}
           </Text>
           <TouchableOpacity
             style={styles.deleteItemButton}
@@ -336,6 +406,12 @@ export function BarcodeScannerView({
       item.product_name ?? item.productInfo?.product_name ?? 'Not extracted yet';
     const brandName =
       item.brand ?? item.productInfo?.brand ?? 'Not extracted yet';
+    const descriptionText =
+      item.description ??
+      item.productInfo?.description ??
+      item.search_result ??
+      item.productInfo?.search_result;
+    const isManual = item.type === 'manual';
     const isSelected = selectedBarcodeIds.includes(item.data);
 
     return (
@@ -364,7 +440,9 @@ export function BarcodeScannerView({
           />
         ) : (
           <View style={styles.selectableItemPlaceholderThumb}>
-            <Text style={styles.savedItemPlaceholderText}>NO PHOTO</Text>
+            <Text style={styles.savedItemPlaceholderText}>
+              {isManual ? 'MANUAL' : 'NO PHOTO'}
+            </Text>
           </View>
         )}
 
@@ -375,6 +453,11 @@ export function BarcodeScannerView({
           <Text style={styles.savedItemBrand} numberOfLines={1}>
             Brand: {brandName}
           </Text>
+          {descriptionText ? (
+            <Text style={styles.selectableItemDescription} numberOfLines={1}>
+              {descriptionText}
+            </Text>
+          ) : null}
           <View style={styles.savedItemBarcodeRow}>
             <Text style={styles.savedItemBarcodeData}>{item.data}</Text>
             <View style={styles.savedItemTypeBadge}>
@@ -752,6 +835,16 @@ export function BarcodeScannerView({
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={styles.addManualProductButton}
+                onPress={handleOpenAddManualModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.addManualProductButtonText}>
+                  + Add Product Manually
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[
                   styles.sendBarcodesButton,
                   isSendingBarcodes ? styles.buttonDisabled : null,
@@ -815,6 +908,16 @@ export function BarcodeScannerView({
             </View>
 
             <View style={styles.modalActionBar}>
+              <TouchableOpacity
+                style={styles.addManualProductButton}
+                onPress={handleOpenAddManualModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.addManualProductButtonText}>
+                  + Add Product Manually
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[
                   styles.sendBarcodesButton,
@@ -1057,6 +1160,123 @@ export function BarcodeScannerView({
                 </Text>
               </View>
             </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isAddManualModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseAddManualModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={styles.modalContainer}>
+            <KeyboardAvoidingView
+              style={styles.keyboardAvoidingContainer}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderTitles}>
+                  <Text style={styles.modalTitle}>Add Product Manually</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Enter product name, brand, and description to save to{' '}
+                    {SCANNED_CODES_FILENAME}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={handleCloseAddManualModal}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalCloseButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.manualFormScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.manualFormCard}>
+                  <View style={styles.formFieldGroup}>
+                    <Text style={styles.formFieldLabel}>PRODUCT NAME *</Text>
+                    <TextInput
+                      style={styles.formTextInput}
+                      value={manualProductName}
+                      onChangeText={(text) => {
+                        setManualProductName(text);
+                        if (manualFormError) setManualFormError(null);
+                      }}
+                      placeholder="e.g. Granulated White Sugar"
+                      placeholderTextColor="#64748B"
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  <View style={styles.formFieldGroup}>
+                    <Text style={styles.formFieldLabel}>PRODUCT BRAND *</Text>
+                    <TextInput
+                      style={styles.formTextInput}
+                      value={manualProductBrand}
+                      onChangeText={(text) => {
+                        setManualProductBrand(text);
+                        if (manualFormError) setManualFormError(null);
+                      }}
+                      placeholder="e.g. Domino"
+                      placeholderTextColor="#64748B"
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  <View style={styles.formFieldGroup}>
+                    <Text style={styles.formFieldLabel}>DESCRIPTION *</Text>
+                    <TextInput
+                      style={[
+                        styles.formTextInput,
+                        styles.formTextAreaInput,
+                      ]}
+                      value={manualProductDescription}
+                      onChangeText={(text) => {
+                        setManualProductDescription(text);
+                        if (manualFormError) setManualFormError(null);
+                      }}
+                      placeholder="Describe the product, ingredients, flavor, or how it is used in cooking..."
+                      placeholderTextColor="#64748B"
+                      multiline={true}
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </View>
+
+                  {manualFormError && (
+                    <Text style={styles.errorText}>{manualFormError}</Text>
+                  )}
+
+                  <View style={styles.manualFormActions}>
+                    <TouchableOpacity
+                      style={styles.primaryButton}
+                      onPress={handleSaveManualProduct}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        Save Product
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={handleCloseAddManualModal}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
           </SafeAreaView>
         </View>
       </Modal>
@@ -1876,5 +2096,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 4,
+  },
+  selectableItemDescription: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  addManualProductButton: {
+    backgroundColor: '#7C3AED',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  addManualProductButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
+  manualFormScrollContent: {
+    padding: 16,
+    paddingBottom: 36,
+  },
+  manualFormCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 16,
+  },
+  formFieldGroup: {
+    gap: 6,
+  },
+  formFieldLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  formTextInput: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    color: '#F8FAFC',
+    fontSize: 15,
+  },
+  formTextAreaInput: {
+    minHeight: 110,
+    paddingTop: 12,
+  },
+  manualFormActions: {
+    gap: 10,
+    marginTop: 4,
   },
 });

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.15.0] - 2026-11-22
+
+### Added
+- **Manual Product Entry (`src/components/BarcodeScannerView.tsx`, `src/hooks/useBarcodeScanner.ts`, `src/utils/barcodeStorage.ts`, `src/types/barcode.ts`):** Added a **"+ Add Product Manually"** button (on the main screen and inside the **Saved Products** modal) and an **Add Product Manually** form modal allowing users to add a product by entering its **Product Name**, **Product Brand**, and **Description**. Added `ManualProductInput`, `addManualProduct`, and `createManualProduct` to store manual entries (`type: 'manual'`, `product_name`, `brand`, `description`, and `search_result`) directly in `scanned_barcodes.json` so they can be viewed, deleted, and sent to the server for recipe generation.
+
 ## [0.14.0] - 2026-11-22
 
 ### Changed

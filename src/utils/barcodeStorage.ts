@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import {
   BarcodeOriginStatus,
+  ManualProductInput,
   ProductInfo,
   ScannedBarcode,
   StoredBarcodeEntry,
@@ -51,19 +52,31 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
         ? item.productInfo.brand.trim()
         : undefined;
 
+  const description =
+    typeof item.description === 'string' && item.description.trim()
+      ? item.description.trim()
+      : typeof item.productInfo?.description === 'string' &&
+          item.productInfo.description.trim()
+        ? item.productInfo.description.trim()
+        : undefined;
+
   const searchResult =
     typeof item.search_result === 'string' && item.search_result.trim()
       ? item.search_result.trim()
       : typeof item.productInfo?.search_result === 'string' &&
           item.productInfo.search_result.trim()
         ? item.productInfo.search_result.trim()
-        : undefined;
+        : description;
 
   const productInfo: ProductInfo | undefined =
-    productName !== undefined || brand !== undefined || searchResult !== undefined
+    productName !== undefined ||
+    brand !== undefined ||
+    description !== undefined ||
+    searchResult !== undefined
       ? {
           product_name: productName ?? '',
           brand: brand ?? '',
+          ...(description !== undefined ? { description } : {}),
           ...(searchResult !== undefined ? { search_result: searchResult } : {}),
         }
       : undefined;
@@ -72,6 +85,7 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
     ...item,
     ...(productName !== undefined ? { product_name: productName } : {}),
     ...(brand !== undefined ? { brand } : {}),
+    ...(description !== undefined ? { description } : {}),
     ...(searchResult !== undefined ? { search_result: searchResult } : {}),
     ...(productInfo ? { productInfo } : {}),
   };
@@ -291,4 +305,53 @@ export function deleteStoredBarcode(barcodeData: string): StoredBarcodeEntry[] {
   writeStoredBarcodes(remainingEntries);
   return remainingEntries;
 }
+
+/**
+ * Adds a manually entered product (product_name, brand, description) to `scanned_barcodes.json`.
+ * Returns the newly created stored entry and the updated list of all entries.
+ */
+export function addManualProduct(input: ManualProductInput): {
+  entry: StoredBarcodeEntry;
+  entries: StoredBarcodeEntry[];
+} {
+  const entries = loadStoredBarcodes();
+  const now = Date.now();
+  const productName = input.product_name.trim();
+  const brand = input.brand.trim();
+  const description = input.description.trim();
+
+  let manualId = `MANUAL-${now}`;
+  let suffix = 1;
+  while (entries.some((item) => item.data === manualId)) {
+    manualId = `MANUAL-${now}-${suffix}`;
+    suffix += 1;
+  }
+
+  const productInfo: ProductInfo = {
+    product_name: productName,
+    brand,
+    ...(description ? { description, search_result: description } : {}),
+  };
+
+  const newEntry: StoredBarcodeEntry = {
+    data: manualId,
+    type: 'manual',
+    firstScannedAt: now,
+    lastScannedAt: now,
+    scanCount: 1,
+    product_name: productName,
+    brand,
+    ...(description ? { description, search_result: description } : {}),
+    productInfo,
+  };
+
+  entries.push(newEntry);
+  writeStoredBarcodes(entries);
+
+  return {
+    entry: newEntry,
+    entries,
+  };
+}
+
 

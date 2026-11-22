@@ -36,13 +36,13 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │           └── graph.py                # StateGraph builders & execution helpers (build_product_agent_graph, arun_product_image_agent, build_recipe_agent_graph, arun_recipe_agent)
 ├── src/
 │   ├── components/
-│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result, front product photo capture, product selection modals, & recipe suggestion display UI
+│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result, front product photo capture, manual product entry modal, product selection modals, & recipe suggestion display UI
 │   ├── hooks/
-│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, front photo attachment, and scanned_barcodes.json (all or selected subset) server sync hook
+│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, front photo attachment, manual product creation, and scanned_barcodes.json (all or selected subset) server sync hook
 │   ├── types/
-│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, ScannedBarcodesSyncResponse, etc.)
+│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, ManualProductInput, ScannedBarcodesSyncResponse, etc.)
 │   └── utils/
-│       ├── barcodeStorage.ts           # Local device persistence for barcodes (scanned_barcodes.json) & photos (product_photos/)
+│       ├── barcodeStorage.ts           # Local device persistence for scanned & manually added products (scanned_barcodes.json) & photos (product_photos/)
 │       ├── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
 │       └── productApi.ts               # API client sending binary photo bytes (/products/analyze-bytes) and all or selected scanned_barcodes.json entries (/products/scanned-barcodes)
 ```
@@ -59,11 +59,12 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - **Multi-Frame Consensus:** A barcode must be read identically across `DEFAULT_REQUIRED_CONSECUTIVE_READS` (3) consecutive frames within `DEFAULT_CONSENSUS_TIMEOUT_MS` (1200ms) before firing `onScanned`.
    - **Supported Symbologies:** Keep `SUPPORTED_BARCODE_TYPES` limited to reliable 1D barcode formats (`ean13`, `ean8`, `upc_a`, `upc_e`, `code128`) and exclude 2D codes like `qr` unless specifically requested otherwise.
 
-2. **New vs. Old Barcode Storage & Front Product Photo Workflow:**
+2. **New vs. Old Barcode Storage, Manual Product Entry & Front Product Photo Workflow:**
    - Every verified barcode is checked against `Paths.document/scanned_barcodes.json` via `checkAndSaveBarcode` (`src/utils/barcodeStorage.ts`) and tagged with `status: 'new' | 'old'`.
    - When a barcode is `'new'` (or missing `frontPhotoUri`), `BarcodeScannerView` prompts the user to capture a **Front product photo** using `CameraView.takePictureAsync`.
    - Captured photos must be copied from temporary camera cache into persistent storage (`Paths.document/product_photos/<barcode>_front_<timestamp>.jpg`) via `saveFrontProductPhoto` / `attachFrontPhoto`, updating `frontPhotoUri` on the stored entry so it remains available for future API uploads to the backend server.
    - When the server extracts `ProductInfo` (`product_name`, `brand`, and `search_result`), `saveProductInfoForBarcode` persists `product_name`, `brand`, and `search_result` directly alongside the barcode in `scanned_barcodes.json` (as well as inside `productInfo`), and `deleteStoredBarcode` removes an entry and its associated photo file from local storage.
+   - Users can also add products manually (`type: 'manual'`, generated `MANUAL-<timestamp>` identifier) by entering `product_name`, `brand`, and `description` via `addManualProduct` / `createManualProduct`, which persists the entry (mapping `description` to `description` and `search_result`) directly in `scanned_barcodes.json` for viewing and recipe generation.
 
 3. **React Native 0.88+ StyleSheet Compatibility:**
    - Use `...StyleSheet.absoluteFill` (NOT `StyleSheet.absoluteFillObject`, which is removed from RN 0.88 type definitions).

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { BarcodeScanningResult } from 'expo-camera';
 import {
   BarcodeScannerConfig,
+  ManualProductInput,
   ProductInfo,
   ScannedBarcode,
   ScannedBarcodesSyncResponse,
@@ -9,6 +10,7 @@ import {
 } from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
 import {
+  addManualProduct,
   checkAndSaveBarcode,
   deleteStoredBarcode,
   loadStoredBarcodes,
@@ -55,6 +57,7 @@ export interface UseBarcodeScannerReturn {
   clearRecipeSuggestion: () => void;
   refreshStoredBarcodes: () => StoredBarcodeEntry[];
   removeStoredBarcode: (barcodeData: string) => StoredBarcodeEntry[];
+  createManualProduct: (input: ManualProductInput) => StoredBarcodeEntry;
 }
 
 /**
@@ -111,6 +114,18 @@ export function useBarcodeScanner(
         prev && prev.data === normalized ? null : prev
       );
       return remaining;
+    },
+    []
+  );
+
+  const createManualProduct = useCallback(
+    (input: ManualProductInput): StoredBarcodeEntry => {
+      const { entry, entries } = addManualProduct(input);
+      setStoredBarcodes(entries);
+      console.log(
+        `[BarcodeScanner] Added manual product (${entry.data}): ${entry.brand} - ${entry.product_name}`
+      );
+      return entry;
     },
     []
   );
@@ -375,5 +390,6 @@ export function useBarcodeScanner(
     clearRecipeSuggestion,
     refreshStoredBarcodes,
     removeStoredBarcode,
+    createManualProduct,
   };
 }
