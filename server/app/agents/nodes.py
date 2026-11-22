@@ -108,30 +108,49 @@ def call_gemini_node(state: AgentState) -> dict:
     }
 
 
+FOOD_SEARCH_CONTEXT_INSTRUCTION = (
+    "Search strictly within the context of food, beverage, grocery, culinary, and pantry products. "
+    "Prioritize matching food or edible grocery items over non-food items with similar names."
+)
+
+
+def ensure_food_search_context(query: str) -> str:
+    """Ensure a search query includes food/grocery product domain bias."""
+    stripped = query.strip()
+    if not stripped:
+        return FOOD_SEARCH_CONTEXT_INSTRUCTION
+    lowered = stripped.lower()
+    if "food" in lowered and ("grocery" in lowered or "pantry" in lowered or "culinary" in lowered):
+        return stripped
+    return f"{stripped}\n\n{FOOD_SEARCH_CONTEXT_INSTRUCTION}"
+
+
 def build_product_search_query(product_name: str, brand: str) -> str:
-    """Build a search prompt using product_name and brand to extract contents and usage details."""
+    """Build a food-biased search prompt using product_name and brand to extract contents and culinary details."""
     return (
-        f"Search for retail product '{brand} {product_name}' "
-        f"(Brand: {brand}, Product Name: {product_name}). "
-        "Provide a concise summary of the product details, including its description, "
-        "ingredients/contents, and common culinary or household usage."
+        f"Search for the food, grocery, or pantry product '{brand} {product_name}' "
+        f"(Brand: {brand}, Product Name: {product_name}) in the food and culinary category. "
+        f"{FOOD_SEARCH_CONTEXT_INSTRUCTION} "
+        "Provide a concise summary of the food product details, including its food category/description, "
+        "ingredients/nutritional contents, flavor profile, and common culinary or cooking usage."
     )
 
 
 @tool
 def gemini_web_search(query: str) -> str:
-    """Perform a grounded web search for up-to-date information using Gemini."""
+    """Perform a grounded web search biased toward food and grocery products using Gemini."""
     client = get_genai_client()
+    food_biased_query = ensure_food_search_context(query)
     interaction = client.interactions.create(
         model="gemini-4-hydrogen",
-        input=query,
+        input=food_biased_query,
         tools=[{"type": "google_search"}],
     )
     return interaction.output_text
 
 
 def web_search_node(state: AgentState) -> dict:
-    """Conduct a grounded Gemini web search for the identified product and log the results."""
+    """Conduct a grounded Gemini web search biased toward food products for the identified item and log the results."""
     product_info = state.get("product_info")
     barcode = state.get("barcode")
 
@@ -142,10 +161,11 @@ def web_search_node(state: AgentState) -> dict:
         product_name = ""
         brand = ""
 
-    query = state.get("search_query") or build_product_search_query(
+    raw_query = state.get("search_query") or build_product_search_query(
         product_name=product_name,
         brand=brand,
     )
+    query = ensure_food_search_context(raw_query)
 
     client = get_genai_client()
     interaction = client.interactions.create(

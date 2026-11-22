@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.14.0] - 2026-11-22
+
+### Changed
+- **Disabled QR Code Scanning (`src/utils/barcodeValidator.ts`, `src/components/BarcodeScannerView.tsx`):** Removed `'qr'` from `SUPPORTED_BARCODE_TYPES`, filtered `'qr'` out of `CameraView` `barcodeScannerSettings`, and updated `isBarcodeValid` to reject `'qr'` and unsupported symbologies so the Android app only scans 1D barcodes (`ean13`, `ean8`, `upc_a`, `upc_e`, `code128`).
+- **Food-Product Context Bias in `web_search_node` (`server/app/agents/nodes.py`):** Updated `build_product_search_query`, `ensure_food_search_context`, `gemini_web_search`, and `web_search_node` to explicitly bias grounded web searches toward food, beverage, grocery, and pantry products, prioritizing edible/culinary items and ingredient details over non-food items with similar names.
+
 ## [0.13.0] - 2026-11-22
 
 ### Added

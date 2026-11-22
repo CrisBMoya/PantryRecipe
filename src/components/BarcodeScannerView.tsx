@@ -76,7 +76,9 @@ export function BarcodeScannerView({
     removeStoredBarcode,
   } = useBarcodeScanner(config, onScanned);
 
-  const barcodeTypes = config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES;
+  const barcodeTypes = (
+    config?.barcodeTypes ?? SUPPORTED_BARCODE_TYPES
+  ).filter((type) => type !== 'qr');
 
   const isAwaitingFrontPhoto =
     scannedResult !== null &&

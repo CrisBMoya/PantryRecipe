@@ -6,7 +6,7 @@ An Android-first mobile application built with **Expo (React Native)** and **Typ
 - **High-Precision Barcode Scanning:**
   - **Multi-Frame Consensus:** Requires 3 consecutive identical reads within 1.2s to eliminate motion-blur and autofocus misreads.
   - **GS1 Modulo-10 Checksum Validation:** Automatically verifies check digits for `EAN-13`, `EAN-8`, and `UPC-A` retail barcodes.
-  - **Curated Symbologies:** Supports `ean13`, `ean8`, `upc_a`, `upc_e`, `code128`, and `qr`.
+  - **Curated Symbologies:** Supports 1D product barcodes (`ean13`, `ean8`, `upc_a`, `upc_e`, and `code128`); QR codes are excluded.
 
 ## Project Structure
 - `App.tsx`: Root application entry screen.

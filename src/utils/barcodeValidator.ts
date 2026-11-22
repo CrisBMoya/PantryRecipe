@@ -1,8 +1,8 @@
 import { BarcodeType } from 'expo-camera';
 
 /**
- * Default barcode types enabled for retail/pantry scanning.
- * Excludes error-prone legacy 1D formats (like codabar/itf14) that lack strong checksums.
+ * Default 1D barcode types enabled for retail/pantry scanning.
+ * Excludes 2D codes (like QR) and error-prone legacy 1D formats (like codabar/itf14) that lack strong checksums.
  */
 export const SUPPORTED_BARCODE_TYPES: BarcodeType[] = [
   'ean13',
@@ -10,9 +10,9 @@ export const SUPPORTED_BARCODE_TYPES: BarcodeType[] = [
   'upc_a',
   'upc_e',
   'code128',
-  'qr',
 ];
 
+const SUPPORTED_BARCODE_TYPE_SET = new Set<string>(SUPPORTED_BARCODE_TYPES);
 const GTIN_TYPES = new Set(['ean13', 'ean8', 'upc_a']);
 
 /**
@@ -40,12 +40,20 @@ export function isValidGtinChecksum(code: string): boolean {
 
 /**
  * Validates a decoded barcode string according to its symbology rules.
+ * Rejects QR codes and any non-supported barcode symbologies.
  */
 export function isBarcodeValid(type: string, data: string): boolean {
   const trimmed = data.trim();
   if (!trimmed) return false;
 
   const normalizedType = type.toLowerCase();
+  if (
+    normalizedType === 'qr' ||
+    !SUPPORTED_BARCODE_TYPE_SET.has(normalizedType)
+  ) {
+    return false;
+  }
+
   if (GTIN_TYPES.has(normalizedType)) {
     return isValidGtinChecksum(trimmed);
   }

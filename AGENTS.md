@@ -57,7 +57,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - **Manual Scan Trigger:** Scanning starts idle (`isScanning = false`) and is only active after calling `startScanning()` until a barcode is verified.
    - **Checksum Enforcement:** `ean13`, `ean8`, and `upc_a` barcodes must pass GS1 Modulo-10 check digit verification (`isValidGtinChecksum`).
    - **Multi-Frame Consensus:** A barcode must be read identically across `DEFAULT_REQUIRED_CONSECUTIVE_READS` (3) consecutive frames within `DEFAULT_CONSENSUS_TIMEOUT_MS` (1200ms) before firing `onScanned`.
-   - **Supported Symbologies:** Keep `SUPPORTED_BARCODE_TYPES` limited to reliable formats (`ean13`, `ean8`, `upc_a`, `upc_e`, `code128`, `qr`) unless specifically requested otherwise.
+   - **Supported Symbologies:** Keep `SUPPORTED_BARCODE_TYPES` limited to reliable 1D barcode formats (`ean13`, `ean8`, `upc_a`, `upc_e`, `code128`) and exclude 2D codes like `qr` unless specifically requested otherwise.
 
 2. **New vs. Old Barcode Storage & Front Product Photo Workflow:**
    - Every verified barcode is checked against `Paths.document/scanned_barcodes.json` via `checkAndSaveBarcode` (`src/utils/barcodeStorage.ts`) and tagged with `status: 'new' | 'old'`.
