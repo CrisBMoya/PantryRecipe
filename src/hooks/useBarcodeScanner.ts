@@ -49,7 +49,9 @@ export interface UseBarcodeScannerReturn {
   resetScanner: () => void;
   attachFrontPhoto: (sourcePhotoUri: string) => string | null;
   uploadFrontPhoto: (photoUriOverride?: string) => Promise<ProductInfo | null>;
-  sendStoredBarcodesToServer: () => Promise<ScannedBarcodesSyncResponse | null>;
+  sendStoredBarcodesToServer: (
+    selectedEntries?: StoredBarcodeEntry[]
+  ) => Promise<ScannedBarcodesSyncResponse | null>;
   clearRecipeSuggestion: () => void;
   refreshStoredBarcodes: () => StoredBarcodeEntry[];
   removeStoredBarcode: (barcodeData: string) => StoredBarcodeEntry[];
@@ -230,8 +232,10 @@ export function useBarcodeScanner(
     [scannedResult, onScanned, uploadFrontPhoto]
   );
 
-  const sendStoredBarcodesToServer =
-    useCallback(async (): Promise<ScannedBarcodesSyncResponse | null> => {
+  const sendStoredBarcodesToServer = useCallback(
+    async (
+      selectedEntries?: StoredBarcodeEntry[]
+    ): Promise<ScannedBarcodesSyncResponse | null> => {
       setIsSendingBarcodes(true);
       setSendBarcodesError(null);
       setSendBarcodesSuccessMessage(null);
@@ -239,13 +243,21 @@ export function useBarcodeScanner(
       try {
         const latestEntries = loadStoredBarcodes();
         setStoredBarcodes(latestEntries);
+        const entriesToSend = selectedEntries ?? latestEntries;
         const response = await sendScannedBarcodesToServer(
-          latestEntries,
+          entriesToSend,
           serverBaseUrl
         );
-        const message = `Sent ${response.received_count} ${
-          response.received_count === 1 ? 'item' : 'items'
-        } from scanned_barcodes.json to server.`;
+        const isSubset =
+          selectedEntries !== undefined &&
+          selectedEntries.length !== latestEntries.length;
+        const message = isSubset
+          ? `Sent ${response.received_count} selected ${
+              response.received_count === 1 ? 'item' : 'items'
+            } from scanned_barcodes.json to server.`
+          : `Sent ${response.received_count} ${
+              response.received_count === 1 ? 'item' : 'items'
+            } from scanned_barcodes.json to server.`;
         setSendBarcodesSuccessMessage(message);
         console.log(`[BarcodeScanner] ${message}`);
 
@@ -270,7 +282,9 @@ export function useBarcodeScanner(
       } finally {
         setIsSendingBarcodes(false);
       }
-    }, [serverBaseUrl]);
+    },
+    [serverBaseUrl]
+  );
 
   const clearRecipeSuggestion = useCallback(() => {
     setRecipeSuggestion(null);

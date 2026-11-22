@@ -47,6 +47,12 @@ export function BarcodeScannerView({
     useState<boolean>(false);
   const [isRecipeModalVisible, setIsRecipeModalVisible] =
     useState<boolean>(false);
+  const [isSendOptionsModalVisible, setIsSendOptionsModalVisible] =
+    useState<boolean>(false);
+  const [isSelectProductsModalVisible, setIsSelectProductsModalVisible] =
+    useState<boolean>(false);
+  const [selectedBarcodeIds, setSelectedBarcodeIds] = useState<string[]>([]);
+  const [lastSentCount, setLastSentCount] = useState<number | null>(null);
 
   const {
     isScanning,
@@ -107,6 +113,14 @@ export function BarcodeScannerView({
           setIsRecipeModalVisible(false);
           return true;
         }
+        if (isSelectProductsModalVisible) {
+          setIsSelectProductsModalVisible(false);
+          return true;
+        }
+        if (isSendOptionsModalVisible) {
+          setIsSendOptionsModalVisible(false);
+          return true;
+        }
         if (isSavedModalVisible) {
           setIsSavedModalVisible(false);
           return true;
@@ -127,6 +141,8 @@ export function BarcodeScannerView({
     return () => subscription.remove();
   }, [
     isRecipeModalVisible,
+    isSelectProductsModalVisible,
+    isSendOptionsModalVisible,
     isSavedModalVisible,
     isRetakingPhoto,
     scannedResult,
@@ -134,8 +150,68 @@ export function BarcodeScannerView({
     resetScanner,
   ]);
 
-  const handleSendBarcodesForRecipe = async () => {
-    const response = await sendStoredBarcodesToServer();
+  const handlePressSendBarcodesButton = () => {
+    const latest = refreshStoredBarcodes();
+    if (latest.length === 0) {
+      void handleSendBarcodesForRecipe();
+      return;
+    }
+    setIsSendOptionsModalVisible(true);
+  };
+
+  const handleSendAllProducts = async () => {
+    setIsSendOptionsModalVisible(false);
+    await handleSendBarcodesForRecipe();
+  };
+
+  const handleOpenSelectProductsModal = () => {
+    const latest = refreshStoredBarcodes();
+    setSelectedBarcodeIds((prev) => {
+      const validPrev = prev.filter((id) =>
+        latest.some((entry) => entry.data === id)
+      );
+      return validPrev.length > 0
+        ? validPrev
+        : latest.map((entry) => entry.data);
+    });
+    setIsSendOptionsModalVisible(false);
+    setIsSelectProductsModalVisible(true);
+  };
+
+  const handleToggleProductSelection = (barcodeData: string) => {
+    setSelectedBarcodeIds((prev) =>
+      prev.includes(barcodeData)
+        ? prev.filter((id) => id !== barcodeData)
+        : [...prev, barcodeData]
+    );
+  };
+
+  const handleSelectAllProducts = () => {
+    setSelectedBarcodeIds(storedBarcodes.map((entry) => entry.data));
+  };
+
+  const handleClearProductSelection = () => {
+    setSelectedBarcodeIds([]);
+  };
+
+  const handleSendSelectedProducts = async () => {
+    const selectedEntries = storedBarcodes.filter((entry) =>
+      selectedBarcodeIds.includes(entry.data)
+    );
+    if (selectedEntries.length === 0) {
+      return;
+    }
+    setIsSelectProductsModalVisible(false);
+    await handleSendBarcodesForRecipe(selectedEntries);
+  };
+
+  const handleSendBarcodesForRecipe = async (
+    selectedEntries?: StoredBarcodeEntry[]
+  ) => {
+    const response = await sendStoredBarcodesToServer(selectedEntries);
+    if (response) {
+      setLastSentCount(response.received_count);
+    }
     if (response?.recipe_suggestion) {
       setIsRecipeModalVisible(true);
     }
@@ -148,6 +224,7 @@ export function BarcodeScannerView({
 
   const handleDeleteBarcode = (barcodeData: string) => {
     removeStoredBarcode(barcodeData);
+    setSelectedBarcodeIds((prev) => prev.filter((id) => id !== barcodeData));
   };
 
   const handleCaptureFrontPhoto = async () => {
@@ -249,6 +326,63 @@ export function BarcodeScannerView({
           </TouchableOpacity>
         </View>
       </View>
+    );
+  };
+
+  const renderSelectableItem = ({ item }: { item: StoredBarcodeEntry }) => {
+    const productName =
+      item.product_name ?? item.productInfo?.product_name ?? 'Not extracted yet';
+    const brandName =
+      item.brand ?? item.productInfo?.brand ?? 'Not extracted yet';
+    const isSelected = selectedBarcodeIds.includes(item.data);
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.selectableItemCard,
+          isSelected ? styles.selectableItemCardSelected : null,
+        ]}
+        onPress={() => handleToggleProductSelection(item.data)}
+        activeOpacity={0.8}
+      >
+        <View
+          style={[
+            styles.checkboxBox,
+            isSelected ? styles.checkboxBoxSelected : null,
+          ]}
+        >
+          {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
+        </View>
+
+        {item.frontPhotoUri ? (
+          <Image
+            source={{ uri: item.frontPhotoUri }}
+            style={styles.selectableItemThumbnail}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.selectableItemPlaceholderThumb}>
+            <Text style={styles.savedItemPlaceholderText}>NO PHOTO</Text>
+          </View>
+        )}
+
+        <View style={styles.savedItemDetails}>
+          <Text style={styles.savedItemProductName} numberOfLines={2}>
+            {productName}
+          </Text>
+          <Text style={styles.savedItemBrand} numberOfLines={1}>
+            Brand: {brandName}
+          </Text>
+          <View style={styles.savedItemBarcodeRow}>
+            <Text style={styles.savedItemBarcodeData}>{item.data}</Text>
+            <View style={styles.savedItemTypeBadge}>
+              <Text style={styles.savedItemTypeText}>
+                {item.type.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -620,7 +754,7 @@ export function BarcodeScannerView({
                   styles.sendBarcodesButton,
                   isSendingBarcodes ? styles.buttonDisabled : null,
                 ]}
-                onPress={() => void handleSendBarcodesForRecipe()}
+                onPress={handlePressSendBarcodesButton}
                 disabled={isSendingBarcodes}
                 activeOpacity={0.8}
               >
@@ -684,7 +818,7 @@ export function BarcodeScannerView({
                   styles.sendBarcodesButton,
                   isSendingBarcodes ? styles.buttonDisabled : null,
                 ]}
-                onPress={() => void handleSendBarcodesForRecipe()}
+                onPress={handlePressSendBarcodesButton}
                 disabled={isSendingBarcodes}
                 activeOpacity={0.8}
               >
@@ -750,6 +884,140 @@ export function BarcodeScannerView({
       </Modal>
 
       <Modal
+        visible={isSendOptionsModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsSendOptionsModalVisible(false)}
+      >
+        <View style={styles.dialogBackdrop}>
+          <View style={styles.dialogCard}>
+            <Text style={styles.dialogTitle}>
+              Send {SCANNED_CODES_FILENAME}
+            </Text>
+            <Text style={styles.dialogSubtitle}>
+              Would you like to send all saved products or choose a specific
+              selection of products for the recipe suggestion?
+            </Text>
+
+            <View style={styles.dialogActions}>
+              <TouchableOpacity
+                style={styles.sendBarcodesButton}
+                onPress={() => void handleSendAllProducts()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.sendBarcodesButtonText}>
+                  Send All Products ({storedBarcodes.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.selectSubsetOptionButton}
+                onPress={handleOpenSelectProductsModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.selectSubsetOptionButtonText}>
+                  Select Products to Send...
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setIsSendOptionsModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isSelectProductsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsSelectProductsModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitles}>
+                <Text style={styles.modalTitle}>Select Products to Send</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedBarcodeIds.length} of {storedBarcodes.length}{' '}
+                  selected from {SCANNED_CODES_FILENAME}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setIsSelectProductsModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.selectionControlsBar}>
+              <View style={styles.selectionQuickButtonsRow}>
+                <TouchableOpacity
+                  style={styles.selectionQuickButton}
+                  onPress={handleSelectAllProducts}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectionQuickButtonText}>
+                    Select All ({storedBarcodes.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.selectionQuickButton}
+                  onPress={handleClearProductSelection}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectionQuickButtonText}>
+                    Clear Selection
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.sendBarcodesButton,
+                  selectedBarcodeIds.length === 0 || isSendingBarcodes
+                    ? styles.buttonDisabled
+                    : null,
+                ]}
+                onPress={() => void handleSendSelectedProducts()}
+                disabled={selectedBarcodeIds.length === 0 || isSendingBarcodes}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.sendBarcodesButtonText}>
+                  Send Selected & Suggest Recipe ({selectedBarcodeIds.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {storedBarcodes.length === 0 ? (
+              <View style={styles.emptyListContainer}>
+                <Text style={styles.emptyListTitle}>No saved products yet</Text>
+                <Text style={styles.emptyListSubtitle}>
+                  Scan a product barcode first to select and send products.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={[...storedBarcodes].reverse()}
+                keyExtractor={(item) => item.data}
+                renderItem={renderSelectableItem}
+                contentContainerStyle={styles.savedListContent}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      <Modal
         visible={isRecipeModalVisible}
         animationType="slide"
         transparent={true}
@@ -761,9 +1029,11 @@ export function BarcodeScannerView({
               <View style={styles.modalHeaderTitles}>
                 <Text style={styles.modalTitle}>Suggested Cooking Recipe</Text>
                 <Text style={styles.modalSubtitle}>
-                  Based on {storedBarcodes.length}{' '}
-                  {storedBarcodes.length === 1 ? 'product' : 'products'} in{' '}
-                  {SCANNED_CODES_FILENAME}
+                  Based on {lastSentCount ?? storedBarcodes.length}{' '}
+                  {(lastSentCount ?? storedBarcodes.length) === 1
+                    ? 'product'
+                    : 'products'}{' '}
+                  from {SCANNED_CODES_FILENAME}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1480,5 +1750,129 @@ const styles = StyleSheet.create({
     color: '#FCA5A5',
     fontSize: 13,
     fontWeight: '700',
+  },
+  dialogBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  dialogCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 22,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  dialogTitle: {
+    color: '#F8FAFC',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  dialogSubtitle: {
+    color: '#94A3B8',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  dialogActions: {
+    gap: 10,
+  },
+  selectSubsetOptionButton: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+  },
+  selectSubsetOptionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  selectionControlsBar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+    gap: 10,
+  },
+  selectionQuickButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  selectionQuickButton: {
+    flex: 1,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  selectionQuickButtonText: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  selectableItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    gap: 12,
+  },
+  selectableItemCardSelected: {
+    borderColor: '#22C55E',
+    backgroundColor: 'rgba(34, 197, 94, 0.08)',
+  },
+  checkboxBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#64748B',
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxBoxSelected: {
+    borderColor: '#22C55E',
+    backgroundColor: '#22C55E',
+  },
+  checkboxCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  selectableItemThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+  },
+  selectableItemPlaceholderThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
   },
 });

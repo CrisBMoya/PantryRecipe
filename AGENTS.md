@@ -36,15 +36,15 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │           └── graph.py                # StateGraph builders & execution helpers (build_product_agent_graph, arun_product_image_agent, build_recipe_agent_graph, arun_recipe_agent)
 ├── src/
 │   ├── components/
-│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result, front product photo capture, & recipe suggestion display UI
+│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result, front product photo capture, product selection modals, & recipe suggestion display UI
 │   ├── hooks/
-│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, front photo attachment, and scanned_barcodes.json server sync hook
+│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, front photo attachment, and scanned_barcodes.json (all or selected subset) server sync hook
 │   ├── types/
 │   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, ScannedBarcodesSyncResponse, etc.)
 │   └── utils/
 │       ├── barcodeStorage.ts           # Local device persistence for barcodes (scanned_barcodes.json) & photos (product_photos/)
 │       ├── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
-│       └── productApi.ts               # API client sending binary photo bytes (/products/analyze-bytes) and full scanned_barcodes.json (/products/scanned-barcodes)
+│       └── productApi.ts               # API client sending binary photo bytes (/products/analyze-bytes) and all or selected scanned_barcodes.json entries (/products/scanned-barcodes)
 ```
 
 ---
@@ -76,7 +76,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` or `get_genai_client()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
    - **Modular Graph Architecture:** Keep LangGraph state and Pydantic schemas (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
    - **Structured Product Image Extraction & Grounded Web Search:** Retail product packaging images are passed as binary image bytes (`image_bytes`, `mime_type`), encoded as base64 data URLs (`encode_image_data_url` / `build_image_human_message` in `nodes.py`), and processed via `llm.with_structured_output(ProductExtraction)` in `call_gemini_node` to guarantee valid JSON extraction of `product_name` and `brand`. The graph then runs `web_search_node`, which conducts a grounded search using `client.interactions.create(model="gemini-4-hydrogen", input=..., tools=[{"type": "google_search"}])` and reads `interaction.output_text` (per `GEMINI_SEARCH_SPEC.md`), logging the results and returning `ProductInfo` (`product_name`, `brand`, `search_result`).
-   - **Pantry Sync & Recipe Suggestion Workflow:** The Android client sends the full contents of `scanned_barcodes.json` via `sendScannedBarcodesToServer` to `POST /products/scanned-barcodes`. The server logs every received entry (`barcode`, `type`, `product_name`, `brand`, `search_result`), invokes the recipe LangGraph workflow (`build_recipe_agent_graph` / `arun_recipe_agent`: `prepare_pantry_context_node` -> `suggest_recipe_node`), and returns `ScannedBarcodesSyncResponse` containing `recipe_suggestion` to be displayed in the Android app.
+   - **Pantry Sync & Recipe Suggestion Workflow:** When pressing the Send button, the Android client prompts the user to either send all saved products or pick a specific subset of products from `scanned_barcodes.json`, then sends the chosen entries via `sendStoredBarcodesToServer` / `sendScannedBarcodesToServer` to `POST /products/scanned-barcodes`. The server logs every received entry (`barcode`, `type`, `product_name`, `brand`, `search_result`), invokes the recipe LangGraph workflow (`build_recipe_agent_graph` / `arun_recipe_agent`: `prepare_pantry_context_node` -> `suggest_recipe_node`), and returns `ScannedBarcodesSyncResponse` containing `recipe_suggestion` to be displayed in the Android app.
 
 ---
 

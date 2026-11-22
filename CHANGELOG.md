@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.0] - 2026-11-22
+
+### Added
+- **Product Subset Selection for Recipe Generation (`src/components/BarcodeScannerView.tsx`, `src/hooks/useBarcodeScanner.ts`):** Updated the **Send `scanned_barcodes.json` & Suggest Recipe** workflow to present a Send Options dialog allowing users to either **Send All Products** or **Select Products to Send...**. Added a **Select Products to Send** modal with per-product checkboxes, **Select All** / **Clear Selection** controls, and a **Send Selected & Suggest Recipe** action that passes only the chosen `StoredBarcodeEntry[]` subset to `sendStoredBarcodesToServer`.
+
 ## [0.12.0] - 2026-11-22
 
 ### Added
