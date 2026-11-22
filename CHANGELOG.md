@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.12.0] - 2026-11-22
+
+### Added
+- **Pantry Barcodes Sync & Recipe Suggestion Agent Flow (`server/main.py`, `server/app/agents/state.py`, `server/app/agents/nodes.py`, `server/app/agents/graph.py`):** Added `POST /products/scanned-barcodes` (`receive_scanned_barcodes`) along with `ScannedBarcodeItem`, `ScannedBarcodesSyncResponse`, and `RecipeAgentState`. Logs all received items from `scanned_barcodes.json` (`barcode`, `type`, `product_name`, `brand`, `search_result`) and executes the LangGraph recipe suggestion workflow (`build_recipe_agent_graph` / `arun_recipe_agent` with `prepare_pantry_context_node` -> `suggest_recipe_node`) to generate and log a cooking recipe based on the available pantry products.
+- **Android Client `scanned_barcodes.json` Submission & Recipe Output (`src/utils/productApi.ts`, `src/hooks/useBarcodeScanner.ts`, `src/components/BarcodeScannerView.tsx`, `src/types/barcode.ts`):** Added `sendScannedBarcodesToServer` and a **Send scanned_barcodes.json & Suggest Recipe** button (on the main screen and inside the **Saved Products** modal) to send the entire `scanned_barcodes.json` payload to the server, log the generated recipe to the console, and display the recipe output in a preview card and a dedicated **Suggested Cooking Recipe** modal.
+
 ## [0.11.0] - 2026-11-18
 
 ### Added

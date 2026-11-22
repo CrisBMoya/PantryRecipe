@@ -4,6 +4,7 @@ import {
   BarcodeScannerConfig,
   ProductInfo,
   ScannedBarcode,
+  ScannedBarcodesSyncResponse,
   StoredBarcodeEntry,
 } from '../types/barcode';
 import { isBarcodeValid } from '../utils/barcodeValidator';
@@ -17,6 +18,7 @@ import {
 import {
   DEFAULT_SERVER_PORT,
   resolveServerBaseUrl,
+  sendScannedBarcodesToServer,
   uploadProductPhotoBinary,
 } from '../utils/productApi';
 
@@ -37,12 +39,18 @@ export interface UseBarcodeScannerReturn {
   requiredReads: number;
   isUploadingPhoto: boolean;
   uploadError: string | null;
+  isSendingBarcodes: boolean;
+  sendBarcodesError: string | null;
+  sendBarcodesSuccessMessage: string | null;
+  recipeSuggestion: string | null;
   storedBarcodes: StoredBarcodeEntry[];
   handleBarcodeScanned: (result: BarcodeScanningResult) => void;
   startScanning: () => void;
   resetScanner: () => void;
   attachFrontPhoto: (sourcePhotoUri: string) => string | null;
   uploadFrontPhoto: (photoUriOverride?: string) => Promise<ProductInfo | null>;
+  sendStoredBarcodesToServer: () => Promise<ScannedBarcodesSyncResponse | null>;
+  clearRecipeSuggestion: () => void;
   refreshStoredBarcodes: () => StoredBarcodeEntry[];
   removeStoredBarcode: (barcodeData: string) => StoredBarcodeEntry[];
 }
@@ -68,6 +76,13 @@ export function useBarcodeScanner(
   const [verifyingProgress, setVerifyingProgress] = useState<number>(0);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSendingBarcodes, setIsSendingBarcodes] = useState<boolean>(false);
+  const [sendBarcodesError, setSendBarcodesError] = useState<string | null>(
+    null
+  );
+  const [sendBarcodesSuccessMessage, setSendBarcodesSuccessMessage] =
+    useState<string | null>(null);
+  const [recipeSuggestion, setRecipeSuggestion] = useState<string | null>(null);
   const [storedBarcodes, setStoredBarcodes] = useState<StoredBarcodeEntry[]>(
     () => loadStoredBarcodes()
   );
@@ -215,6 +230,52 @@ export function useBarcodeScanner(
     [scannedResult, onScanned, uploadFrontPhoto]
   );
 
+  const sendStoredBarcodesToServer =
+    useCallback(async (): Promise<ScannedBarcodesSyncResponse | null> => {
+      setIsSendingBarcodes(true);
+      setSendBarcodesError(null);
+      setSendBarcodesSuccessMessage(null);
+
+      try {
+        const latestEntries = loadStoredBarcodes();
+        setStoredBarcodes(latestEntries);
+        const response = await sendScannedBarcodesToServer(
+          latestEntries,
+          serverBaseUrl
+        );
+        const message = `Sent ${response.received_count} ${
+          response.received_count === 1 ? 'item' : 'items'
+        } from scanned_barcodes.json to server.`;
+        setSendBarcodesSuccessMessage(message);
+        console.log(`[BarcodeScanner] ${message}`);
+
+        if (response.recipe_suggestion) {
+          setRecipeSuggestion(response.recipe_suggestion);
+          console.log(
+            `[BarcodeScanner] Suggested Cooking Recipe:\n${response.recipe_suggestion}`
+          );
+        } else {
+          setRecipeSuggestion(null);
+        }
+
+        return response;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to send scanned_barcodes.json to server.';
+        console.warn('Failed to send scanned_barcodes.json to server:', error);
+        setSendBarcodesError(message);
+        return null;
+      } finally {
+        setIsSendingBarcodes(false);
+      }
+    }, [serverBaseUrl]);
+
+  const clearRecipeSuggestion = useCallback(() => {
+    setRecipeSuggestion(null);
+  }, []);
+
   const handleBarcodeScanned = useCallback(
     (result: BarcodeScanningResult) => {
       if (!isScanning || scannedResult) return;
@@ -286,12 +347,18 @@ export function useBarcodeScanner(
     requiredReads,
     isUploadingPhoto,
     uploadError,
+    isSendingBarcodes,
+    sendBarcodesError,
+    sendBarcodesSuccessMessage,
+    recipeSuggestion,
     storedBarcodes,
     handleBarcodeScanned,
     startScanning,
     resetScanner,
     attachFrontPhoto,
     uploadFrontPhoto,
+    sendStoredBarcodesToServer,
+    clearRecipeSuggestion,
     refreshStoredBarcodes,
     removeStoredBarcode,
   };

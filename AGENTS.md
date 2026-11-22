@@ -14,7 +14,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 - **Camera & Barcode:** `expo-camera` (`CameraView`, `useCameraPermissions`).
 - **Local Storage:** `expo-file-system` (`File`, `Directory`, `Paths.document`) for persisting scanned barcodes (`scanned_barcodes.json`) and captured front product photos (`product_photos/`) on device for future API upload.
 - **Backend & Agent Framework (`server/`):** Python `>=3.14` managed with `uv`, `fastapi`, `uvicorn`, `python-multipart`, `langgraph`, `langchain`, `langchain-google-genai` (default model `gemini-2.5-flash`), `pydantic`, and `python-dotenv`.
-- **Backend Entry Point:** `server/main.py` (`FastAPI` app `main:app`) -> `server/app/agents/graph.py` (`arun_product_image_agent` / `run_product_image_agent`).
+- **Backend Entry Point:** `server/main.py` (`FastAPI` app `main:app`) -> `server/app/agents/graph.py` (`arun_product_image_agent` / `run_product_image_agent` and `arun_recipe_agent` / `run_recipe_agent`).
 
 ---
 
@@ -27,24 +27,24 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
 │   ├── .env                            # Local secrets (GOOGLE_API_KEY) — gitignored, never commit or log
 │   ├── pyproject.toml                  # Python project dependencies (fastapi, uvicorn, python-multipart, langgraph, langchain, langchain-google-genai, pydantic, python-dotenv)
 │   ├── uv.lock                         # Locked UV dependency graph
-│   ├── main.py                         # FastAPI application entry point exposing product image extraction endpoints
+│   ├── main.py                         # FastAPI application entry point exposing product image extraction & pantry recipe suggestion endpoints
 │   └── app/
 │       ├── config.py                   # Environment loader (server/.env -> GOOGLE_API_KEY), Gemini LLM factory (get_llm), & GenAI SDK client factory (get_genai_client)
 │       └── agents/
-│           ├── state.py                # LangGraph AgentState & Pydantic schemas (ProductExtraction, ProductInfo with product_name, brand, search_result)
-│           ├── nodes.py                # Binary image base64 encoding, Gemini vision structured-output node (call_gemini_node), & grounded web search node (web_search_node)
-│           └── graph.py                # StateGraph builder & execution helpers (build_product_agent_graph, run_product_image_agent, arun_product_image_agent)
+│           ├── state.py                # LangGraph AgentState, RecipeAgentState & Pydantic schemas (ProductExtraction, ProductInfo, ScannedBarcodeItem, ScannedBarcodesSyncResponse)
+│           ├── nodes.py                # Binary image base64 encoding, Gemini vision structured-output node (call_gemini_node), grounded web search node (web_search_node), & recipe suggestion nodes (prepare_pantry_context_node, suggest_recipe_node)
+│           └── graph.py                # StateGraph builders & execution helpers (build_product_agent_graph, arun_product_image_agent, build_recipe_agent_graph, arun_recipe_agent)
 ├── src/
 │   ├── components/
-│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result & front product photo capture UI
+│   │   └── BarcodeScannerView.tsx      # Camera viewfinder, reticle, scan result, front product photo capture, & recipe suggestion display UI
 │   ├── hooks/
-│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, and front photo attachment hook
+│   │   └── useBarcodeScanner.ts        # Multi-frame consensus, scan state, front photo attachment, and scanned_barcodes.json server sync hook
 │   ├── types/
-│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, etc.)
+│   │   └── barcode.ts                  # Shared TypeScript interfaces (ScannedBarcode, StoredBarcodeEntry, ProductInfo, ScannedBarcodesSyncResponse, etc.)
 │   └── utils/
 │       ├── barcodeStorage.ts           # Local device persistence for barcodes (scanned_barcodes.json) & photos (product_photos/)
 │       ├── barcodeValidator.ts         # Pure GS1 Modulo-10 checksum & format validators
-│       └── productApi.ts               # Binary POST client (uploadProductPhotoBinary) sending photo bytes to /products/analyze-bytes
+│       └── productApi.ts               # API client sending binary photo bytes (/products/analyze-bytes) and full scanned_barcodes.json (/products/scanned-barcodes)
 ```
 
 ---
@@ -76,6 +76,7 @@ Because multiple LLMs and fresh sessions work on this repository, adhere strictl
    - **LLM Instantiation & Secrets:** Always instantiate Gemini models through `get_llm()` or `get_genai_client()` in `server/app/config.py`, which loads `GOOGLE_API_KEY` from `server/.env`. Never hardcode API keys or commit `server/.env`.
    - **Modular Graph Architecture:** Keep LangGraph state and Pydantic schemas (`state.py`), node functions (`nodes.py`), and graph wiring (`graph.py`) separated under `server/app/agents/` so new nodes, tools, and API endpoints can be added cleanly.
    - **Structured Product Image Extraction & Grounded Web Search:** Retail product packaging images are passed as binary image bytes (`image_bytes`, `mime_type`), encoded as base64 data URLs (`encode_image_data_url` / `build_image_human_message` in `nodes.py`), and processed via `llm.with_structured_output(ProductExtraction)` in `call_gemini_node` to guarantee valid JSON extraction of `product_name` and `brand`. The graph then runs `web_search_node`, which conducts a grounded search using `client.interactions.create(model="gemini-4-hydrogen", input=..., tools=[{"type": "google_search"}])` and reads `interaction.output_text` (per `GEMINI_SEARCH_SPEC.md`), logging the results and returning `ProductInfo` (`product_name`, `brand`, `search_result`).
+   - **Pantry Sync & Recipe Suggestion Workflow:** The Android client sends the full contents of `scanned_barcodes.json` via `sendScannedBarcodesToServer` to `POST /products/scanned-barcodes`. The server logs every received entry (`barcode`, `type`, `product_name`, `brand`, `search_result`), invokes the recipe LangGraph workflow (`build_recipe_agent_graph` / `arun_recipe_agent`: `prepare_pantry_context_node` -> `suggest_recipe_node`), and returns `ScannedBarcodesSyncResponse` containing `recipe_suggestion` to be displayed in the Android app.
 
 ---
 

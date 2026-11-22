@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  ScrollView,
   BackHandler,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -44,6 +45,8 @@ export function BarcodeScannerView({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isSavedModalVisible, setIsSavedModalVisible] =
     useState<boolean>(false);
+  const [isRecipeModalVisible, setIsRecipeModalVisible] =
+    useState<boolean>(false);
 
   const {
     isScanning,
@@ -52,12 +55,17 @@ export function BarcodeScannerView({
     requiredReads,
     isUploadingPhoto,
     uploadError,
+    isSendingBarcodes,
+    sendBarcodesError,
+    sendBarcodesSuccessMessage,
+    recipeSuggestion,
     storedBarcodes,
     handleBarcodeScanned,
     startScanning,
     resetScanner,
     attachFrontPhoto,
     uploadFrontPhoto,
+    sendStoredBarcodesToServer,
     refreshStoredBarcodes,
     removeStoredBarcode,
   } = useBarcodeScanner(config, onScanned);
@@ -95,6 +103,10 @@ export function BarcodeScannerView({
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (isRecipeModalVisible) {
+          setIsRecipeModalVisible(false);
+          return true;
+        }
         if (isSavedModalVisible) {
           setIsSavedModalVisible(false);
           return true;
@@ -113,7 +125,21 @@ export function BarcodeScannerView({
       }
     );
     return () => subscription.remove();
-  }, [isSavedModalVisible, isRetakingPhoto, scannedResult, isScanning, resetScanner]);
+  }, [
+    isRecipeModalVisible,
+    isSavedModalVisible,
+    isRetakingPhoto,
+    scannedResult,
+    isScanning,
+    resetScanner,
+  ]);
+
+  const handleSendBarcodesForRecipe = async () => {
+    const response = await sendStoredBarcodesToServer();
+    if (response?.recipe_suggestion) {
+      setIsRecipeModalVisible(true);
+    }
+  };
 
   const handleOpenSavedModal = () => {
     refreshStoredBarcodes();
@@ -539,12 +565,78 @@ export function BarcodeScannerView({
             </>
           ) : (
             <>
+              {sendBarcodesSuccessMessage && !isSendingBarcodes && (
+                <View style={styles.syncSuccessBanner}>
+                  <Text style={styles.syncSuccessText}>
+                    {sendBarcodesSuccessMessage}
+                  </Text>
+                </View>
+              )}
+
+              {sendBarcodesError && !isSendingBarcodes && (
+                <View style={styles.syncErrorBanner}>
+                  <Text style={styles.errorText}>
+                    Send failed: {sendBarcodesError}
+                  </Text>
+                </View>
+              )}
+
+              {recipeSuggestion && !isSendingBarcodes && (
+                <View style={styles.recipePreviewCard}>
+                  <View style={styles.recipePreviewHeader}>
+                    <Text style={styles.recipePreviewLabel}>
+                      SUGGESTED COOKING RECIPE
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setIsRecipeModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.recipeExpandLink}>
+                        View Full Recipe
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView
+                    style={styles.recipePreviewScroll}
+                    nestedScrollEnabled={true}
+                  >
+                    <Text style={styles.recipePreviewText} selectable>
+                      {recipeSuggestion}
+                    </Text>
+                  </ScrollView>
+                </View>
+              )}
+
               <TouchableOpacity
                 style={styles.scanActionButton}
                 onPress={handleStartScanning}
                 activeOpacity={0.8}
               >
                 <Text style={styles.primaryButtonText}>Scan Barcode</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sendBarcodesButton,
+                  isSendingBarcodes ? styles.buttonDisabled : null,
+                ]}
+                onPress={() => void handleSendBarcodesForRecipe()}
+                disabled={isSendingBarcodes}
+                activeOpacity={0.8}
+              >
+                {isSendingBarcodes ? (
+                  <View style={styles.buttonLoadingRow}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.sendBarcodesButtonText}>
+                      Generating Recipe from {SCANNED_CODES_FILENAME}...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.sendBarcodesButtonText}>
+                    Send {SCANNED_CODES_FILENAME} & Suggest Recipe (
+                    {storedBarcodes.length})
+                  </Text>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -586,6 +678,56 @@ export function BarcodeScannerView({
               </TouchableOpacity>
             </View>
 
+            <View style={styles.modalActionBar}>
+              <TouchableOpacity
+                style={[
+                  styles.sendBarcodesButton,
+                  isSendingBarcodes ? styles.buttonDisabled : null,
+                ]}
+                onPress={() => void handleSendBarcodesForRecipe()}
+                disabled={isSendingBarcodes}
+                activeOpacity={0.8}
+              >
+                {isSendingBarcodes ? (
+                  <View style={styles.buttonLoadingRow}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.sendBarcodesButtonText}>
+                      Generating Recipe from {SCANNED_CODES_FILENAME}...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.sendBarcodesButtonText}>
+                    Send {SCANNED_CODES_FILENAME} & Suggest Recipe (
+                    {storedBarcodes.length})
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {sendBarcodesSuccessMessage && !isSendingBarcodes && (
+                <Text style={styles.syncSuccessText}>
+                  {sendBarcodesSuccessMessage}
+                </Text>
+              )}
+
+              {sendBarcodesError && !isSendingBarcodes && (
+                <Text style={styles.errorText}>
+                  Send failed: {sendBarcodesError}
+                </Text>
+              )}
+
+              {recipeSuggestion && !isSendingBarcodes && (
+                <TouchableOpacity
+                  style={styles.viewRecipeBannerButton}
+                  onPress={() => setIsRecipeModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.viewRecipeBannerText}>
+                    View Suggested Cooking Recipe
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {storedBarcodes.length === 0 ? (
               <View style={styles.emptyListContainer}>
                 <Text style={styles.emptyListTitle}>No saved products yet</Text>
@@ -603,6 +745,46 @@ export function BarcodeScannerView({
                 showsVerticalScrollIndicator={false}
               />
             )}
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isRecipeModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsRecipeModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitles}>
+                <Text style={styles.modalTitle}>Suggested Cooking Recipe</Text>
+                <Text style={styles.modalSubtitle}>
+                  Based on {storedBarcodes.length}{' '}
+                  {storedBarcodes.length === 1 ? 'product' : 'products'} in{' '}
+                  {SCANNED_CODES_FILENAME}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setIsRecipeModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.recipeModalScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <View style={styles.recipeFullCard}>
+                <Text style={styles.recipeFullText} selectable>
+                  {recipeSuggestion || 'No recipe suggestion available yet.'}
+                </Text>
+              </View>
+            </ScrollView>
           </SafeAreaView>
         </View>
       </Modal>
@@ -1000,6 +1182,115 @@ const styles = StyleSheet.create({
     color: '#38BDF8',
     fontSize: 15,
     fontWeight: '700',
+  },
+  sendBarcodesButton: {
+    backgroundColor: '#16A34A',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  sendBarcodesButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  syncSuccessBanner: {
+    backgroundColor: 'rgba(22, 163, 74, 0.2)',
+    borderWidth: 1,
+    borderColor: '#22C55E',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  syncSuccessText: {
+    color: '#4ADE80',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  syncErrorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  modalActionBar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  recipePreviewCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#22C55E',
+    maxHeight: 220,
+    gap: 8,
+  },
+  recipePreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  recipePreviewLabel: {
+    color: '#4ADE80',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  recipeExpandLink: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recipePreviewScroll: {
+    maxHeight: 165,
+  },
+  recipePreviewText: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  viewRecipeBannerButton: {
+    backgroundColor: 'rgba(56, 189, 248, 0.16)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  viewRecipeBannerText: {
+    color: '#38BDF8',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recipeModalScrollContent: {
+    padding: 16,
+    paddingBottom: 36,
+  },
+  recipeFullCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  recipeFullText: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    lineHeight: 22,
   },
   modalBackdrop: {
     flex: 1,

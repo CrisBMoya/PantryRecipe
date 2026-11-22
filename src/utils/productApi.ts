@@ -1,10 +1,16 @@
 import { Platform } from 'react-native';
 import { fetch } from 'expo/fetch';
 import { File as FsFile } from 'expo-file-system';
-import { ProductInfo } from '../types/barcode';
+import {
+  ProductInfo,
+  ScannedBarcodesSyncResponse,
+  StoredBarcodeEntry,
+} from '../types/barcode';
+import { loadStoredBarcodes } from './barcodeStorage';
 
 export const DEFAULT_SERVER_PORT = 8000;
 export const ANALYZE_BYTES_PATH = '/products/analyze-bytes';
+export const SCANNED_BARCODES_PATH = '/products/scanned-barcodes';
 
 function inferMimeType(uri: string): string {
   const lower = uri.toLowerCase();
@@ -136,5 +142,70 @@ export async function uploadProductPhotoBinary(
     product_name: data.product_name,
     brand: data.brand,
     ...(searchResult !== undefined ? { search_result: searchResult } : {}),
+  };
+}
+
+/**
+ * Sends the entire contents of `scanned_barcodes.json` (barcodes, product titles,
+ * brands, and web search results) to `POST /products/scanned-barcodes` on the server.
+ */
+export async function sendScannedBarcodesToServer(
+  entriesOverride?: StoredBarcodeEntry[],
+  serverBaseUrl?: string
+): Promise<ScannedBarcodesSyncResponse> {
+  const entries = entriesOverride ?? loadStoredBarcodes();
+  const baseUrl = resolveServerBaseUrl(serverBaseUrl);
+  const endpoint = `${baseUrl}${SCANNED_BARCODES_PATH}`;
+  const parsedUrl = new URL(baseUrl);
+  const port =
+    parsedUrl.port ||
+    (parsedUrl.protocol === 'https:' ? '443' : String(DEFAULT_SERVER_PORT));
+
+  console.log(
+    `[ProductAPI] Sending scanned_barcodes.json (${entries.length} items) -> Server: ${baseUrl} (Port: ${port}) | Endpoint: ${endpoint}`
+  );
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(entries),
+  });
+
+  if (!response.ok) {
+    let errorDetail = `Server responded with HTTP ${response.status}`;
+    try {
+      const errorJson = (await response.json()) as { detail?: string };
+      if (errorJson?.detail) {
+        errorDetail =
+          typeof errorJson.detail === 'string'
+            ? errorJson.detail
+            : JSON.stringify(errorJson.detail);
+      }
+    } catch {
+      // Ignore non-JSON error body
+    }
+    throw new Error(errorDetail);
+  }
+
+  const data = (await response.json()) as ScannedBarcodesSyncResponse;
+  const recipeSuggestion =
+    typeof data?.recipe_suggestion === 'string' &&
+    data.recipe_suggestion.trim()
+      ? data.recipe_suggestion.trim()
+      : undefined;
+
+  return {
+    status: data?.status ?? 'ok',
+    received_count:
+      typeof data?.received_count === 'number'
+        ? data.received_count
+        : entries.length,
+    items: Array.isArray(data?.items) ? data.items : entries,
+    ...(recipeSuggestion !== undefined
+      ? { recipe_suggestion: recipeSuggestion }
+      : {}),
   };
 }

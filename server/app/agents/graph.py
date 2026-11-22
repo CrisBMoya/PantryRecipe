@@ -10,9 +10,16 @@ from app.agents.nodes import (
     build_image_human_message,
     call_gemini_node,
     normalize_image_mime_type,
+    prepare_pantry_context_node,
+    suggest_recipe_node,
     web_search_node,
 )
-from app.agents.state import AgentState, ProductInfo
+from app.agents.state import (
+    AgentState,
+    ProductInfo,
+    RecipeAgentState,
+    ScannedBarcodeItem,
+)
 
 
 def build_product_agent_graph() -> CompiledStateGraph:
@@ -67,4 +74,32 @@ async def arun_product_image_agent(
         }
     )
     return result["product_info"]
+
+
+def build_recipe_agent_graph() -> CompiledStateGraph:
+    """Construct and compile the pantry recipe suggestion LangGraph workflow."""
+    workflow = StateGraph(RecipeAgentState)
+
+    workflow.add_node("prepare_context", prepare_pantry_context_node)
+    workflow.add_node("suggest_recipe", suggest_recipe_node)
+
+    workflow.add_edge(START, "prepare_context")
+    workflow.add_edge("prepare_context", "suggest_recipe")
+    workflow.add_edge("suggest_recipe", END)
+
+    return workflow.compile()
+
+
+def run_recipe_agent(items: list[ScannedBarcodeItem]) -> str:
+    """Execute the recipe suggestion agent graph synchronously on a list of scanned items."""
+    graph = build_recipe_agent_graph()
+    result = graph.invoke({"items": items})
+    return result["recipe_suggestion"]
+
+
+async def arun_recipe_agent(items: list[ScannedBarcodeItem]) -> str:
+    """Asynchronously execute the recipe suggestion agent graph on a list of scanned items."""
+    graph = build_recipe_agent_graph()
+    result = await graph.ainvoke({"items": items})
+    return result["recipe_suggestion"]
 

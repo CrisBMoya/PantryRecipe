@@ -6,10 +6,16 @@ import logging
 import mimetypes
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.agents import ProductInfo, arun_product_image_agent
+from app.agents import (
+    ProductInfo,
+    ScannedBarcodeItem,
+    ScannedBarcodesSyncResponse,
+    arun_product_image_agent,
+    arun_recipe_agent,
+)
 from app.agents.nodes import DEFAULT_IMAGE_MIME_TYPE, normalize_image_mime_type
 
 logging.basicConfig(level=logging.INFO)
@@ -126,6 +132,76 @@ async def analyze_product_image_bytes(
         product_info.brand,
     )
     return product_info
+
+
+@app.post(
+    "/products/scanned-barcodes",
+    response_model=ScannedBarcodesSyncResponse,
+    tags=["products"],
+    summary="Receive and parse all elements from scanned_barcodes.json",
+)
+async def receive_scanned_barcodes(
+    payload: list[ScannedBarcodeItem] | dict[str, list[ScannedBarcodeItem]] = Body(
+        ...,
+        description="Array of entries (or object containing 'items'/'barcodes') from scanned_barcodes.json.",
+    ),
+) -> ScannedBarcodesSyncResponse:
+    """Receive the elements from scanned_barcodes.json (product titles, brands, and web results) and log them."""
+    if isinstance(payload, dict):
+        raw_items = payload.get("items") or payload.get("barcodes") or []
+    else:
+        raw_items = payload
+
+    normalized_items: list[ScannedBarcodeItem] = []
+    logger.info(
+        "Received scanned_barcodes.json (/products/scanned-barcodes) | total_items=%d",
+        len(raw_items),
+    )
+
+    for index, item in enumerate(raw_items, start=1):
+        product_name = item.resolved_product_name
+        brand = item.resolved_brand
+        search_result = item.resolved_search_result
+
+        product_info = (
+            ProductInfo(
+                product_name=product_name or "",
+                brand=brand or "",
+                search_result=search_result,
+            )
+            if (product_name or brand or search_result)
+            else item.productInfo
+        )
+
+        normalized = item.model_copy(
+            update={
+                "product_name": product_name,
+                "brand": brand,
+                "search_result": search_result,
+                "productInfo": product_info,
+            }
+        )
+        normalized_items.append(normalized)
+
+        logger.info(
+            "  [%d/%d] barcode=%s | type=%s | product_name=%r | brand=%r | search_result=%r",
+            index,
+            len(raw_items),
+            normalized.data,
+            normalized.type,
+            normalized.product_name,
+            normalized.brand,
+            normalized.search_result,
+        )
+
+    recipe_suggestion = await arun_recipe_agent(normalized_items)
+
+    return ScannedBarcodesSyncResponse(
+        status="ok",
+        received_count=len(normalized_items),
+        items=normalized_items,
+        recipe_suggestion=recipe_suggestion,
+    )
 
 
 def main() -> None:

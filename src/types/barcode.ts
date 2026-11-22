@@ -33,6 +33,13 @@ export interface StoredBarcodeEntry {
   productInfo?: ProductInfo;
 }
 
+export interface ScannedBarcodesSyncResponse {
+  status: string;
+  received_count: number;
+  items: StoredBarcodeEntry[];
+  recipe_suggestion?: string;
+}
+
 export interface BarcodeScannerConfig {
   /**
    * Number of identical consecutive frames required to confirm a scan.

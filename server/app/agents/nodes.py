@@ -8,7 +8,13 @@ import logging
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 
-from app.agents.state import AgentState, ProductExtraction, ProductInfo
+from app.agents.state import (
+    AgentState,
+    ProductExtraction,
+    ProductInfo,
+    RecipeAgentState,
+    ScannedBarcodeItem,
+)
 from app.config import get_genai_client, get_llm
 
 logger = logging.getLogger("uvicorn.error")
@@ -168,6 +174,95 @@ def web_search_node(state: AgentState) -> dict:
         "search_query": query,
         "search_result": result_text,
         "messages": [AIMessage(content=result_text)],
+    }
+
+
+RECIPE_SYSTEM_PROMPT = (
+    "You are an expert culinary chef assistant for PantryRecipe. "
+    "You receive a list of pantry products scanned by the user, including their "
+    "product titles, brands, and web search details (ingredients, contents, and usage). "
+    "Suggest a practical, delicious cooking recipe that makes primary use of these "
+    "available items. Format the response clearly with:\n"
+    "1. Recipe Title & Brief Description\n"
+    "2. Prep/Cook Time & Servings\n"
+    "3. Ingredients (highlighting the user's scanned pantry items and listing any basic kitchen staples needed)\n"
+    "4. Step-by-Step Cooking Instructions"
+)
+
+
+def format_pantry_items_prompt(items: list[ScannedBarcodeItem]) -> str:
+    """Format scanned barcode items into a structured prompt listing product titles, brands, and web results."""
+    if not items:
+        return "No pantry items were provided."
+
+    lines: list[str] = [
+        f"Here are the {len(items)} pantry items from scanned_barcodes.json:"
+    ]
+    for index, item in enumerate(items, start=1):
+        product_name = item.resolved_product_name or "Unknown Product"
+        brand = item.resolved_brand or "Unknown Brand"
+        search_result = item.resolved_search_result or "No additional web details available."
+        lines.append(
+            f"\nItem {index}:\n"
+            f"- Barcode: {item.data}\n"
+            f"- Product Title: {product_name}\n"
+            f"- Brand: {brand}\n"
+            f"- Product Details / Web Search Result: {search_result}"
+        )
+
+    lines.append(
+        "\nBased on these pantry products, please suggest a complete cooking recipe."
+    )
+    return "\n".join(lines)
+
+
+def prepare_pantry_context_node(state: RecipeAgentState) -> dict:
+    """Build the formatted pantry summary prompt and initial HumanMessage from scanned items."""
+    items = list(state.get("items") or [])
+    pantry_summary = format_pantry_items_prompt(items)
+    return {
+        "pantry_summary": pantry_summary,
+        "messages": [HumanMessage(content=pantry_summary)],
+    }
+
+
+def suggest_recipe_node(state: RecipeAgentState) -> dict:
+    """Invoke the Gemini LLM to generate a cooking recipe based on the scanned pantry items."""
+    items = list(state.get("items") or [])
+    if not items:
+        fallback = (
+            "No products were found in scanned_barcodes.json. "
+            "Please scan at least one product before requesting a recipe suggestion."
+        )
+        return {
+            "recipe_suggestion": fallback,
+            "messages": [AIMessage(content=fallback)],
+        }
+
+    llm = get_llm(temperature=0.4)
+    state_messages = list(state.get("messages") or [])
+    if not state_messages:
+        pantry_summary = state.get("pantry_summary") or format_pantry_items_prompt(items)
+        state_messages = [HumanMessage(content=pantry_summary)]
+
+    messages = [SystemMessage(content=RECIPE_SYSTEM_PROMPT), *state_messages]
+    response = llm.invoke(messages)
+
+    content = response.content
+    if isinstance(content, str):
+        recipe_text = content.strip()
+    else:
+        recipe_text = str(content).strip()
+
+    logger.info(
+        "[RecipeAgent] Generated recipe suggestion for %d pantry items:\n%s",
+        len(items),
+        recipe_text,
+    )
+
+    return {
+        "recipe_suggestion": recipe_text,
+        "messages": [AIMessage(content=recipe_text)],
     }
 
 
