@@ -26,9 +26,17 @@ class ProductExtraction(BaseModel):
 class ProductInfo(ProductExtraction):
     """Product metadata and grounded web search details returned by the agent workflow."""
 
+    description: str | None = Field(
+        default=None,
+        description="Product description or summary of details.",
+    )
     search_result: str | None = Field(
         default=None,
         description="Product details, contents, and usage summary extracted via Gemini web search.",
+    )
+    in_existence: bool = Field(
+        default=True,
+        description="Whether the product currently has existences (True) or not (False).",
     )
 
 
@@ -46,6 +54,10 @@ class ScannedBarcodeItem(BaseModel):
     scanCount: int | None = Field(
         default=1, description="Number of times this barcode was scanned."
     )
+    in_existence: bool = Field(
+        default=True,
+        description="Whether the product is currently in existence (True) or out of existence (False).",
+    )
     frontPhotoUri: str | None = Field(
         default=None, description="Local device URI for the front product photo."
     )
@@ -54,6 +66,10 @@ class ScannedBarcodeItem(BaseModel):
     )
     brand: str | None = Field(
         default=None, description="Extracted product brand or manufacturer."
+    )
+    description: str | None = Field(
+        default=None,
+        description="Product description stored alongside brand and name.",
     )
     search_result: str | None = Field(
         default=None,
@@ -83,6 +99,19 @@ class ScannedBarcodeItem(BaseModel):
         return None
 
     @property
+    def resolved_description(self) -> str | None:
+        """Return description from top-level field, nested productInfo, or search_result."""
+        if self.description and self.description.strip():
+            return self.description.strip()
+        if (
+            self.productInfo
+            and self.productInfo.description
+            and self.productInfo.description.strip()
+        ):
+            return self.productInfo.description.strip()
+        return self.resolved_search_result
+
+    @property
     def resolved_search_result(self) -> str | None:
         """Return search_result from top-level field or nested productInfo."""
         if self.search_result and self.search_result.strip():
@@ -93,6 +122,8 @@ class ScannedBarcodeItem(BaseModel):
             and self.productInfo.search_result.strip()
         ):
             return self.productInfo.search_result.strip()
+        if self.description and self.description.strip():
+            return self.description.strip()
         return None
 
 

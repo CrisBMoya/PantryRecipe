@@ -7,12 +7,14 @@ export interface ProductInfo {
   brand: string;
   description?: string;
   search_result?: string;
+  in_existence?: boolean;
 }
 
 export interface ManualProductInput {
   product_name: string;
   brand: string;
   description: string;
+  in_existence?: boolean;
 }
 
 export interface ScannedBarcode {
@@ -20,6 +22,7 @@ export interface ScannedBarcode {
   data: string;
   scannedAt: number;
   status?: BarcodeOriginStatus;
+  in_existence?: boolean;
   frontPhotoUri?: string;
   product_name?: string;
   brand?: string;
@@ -34,6 +37,7 @@ export interface StoredBarcodeEntry {
   firstScannedAt: number;
   lastScannedAt: number;
   scanCount: number;
+  in_existence: boolean;
   frontPhotoUri?: string;
   product_name?: string;
   brand?: string;

@@ -161,22 +161,28 @@ async def receive_scanned_barcodes(
     for index, item in enumerate(raw_items, start=1):
         product_name = item.resolved_product_name
         brand = item.resolved_brand
+        description = item.resolved_description
         search_result = item.resolved_search_result
+        in_existence = item.in_existence
 
         product_info = (
             ProductInfo(
                 product_name=product_name or "",
                 brand=brand or "",
+                description=description,
                 search_result=search_result,
+                in_existence=in_existence,
             )
-            if (product_name or brand or search_result)
+            if (product_name or brand or description or search_result)
             else item.productInfo
         )
 
         normalized = item.model_copy(
             update={
+                "in_existence": in_existence,
                 "product_name": product_name,
                 "brand": brand,
+                "description": description,
                 "search_result": search_result,
                 "productInfo": product_info,
             }
@@ -184,14 +190,15 @@ async def receive_scanned_barcodes(
         normalized_items.append(normalized)
 
         logger.info(
-            "  [%d/%d] barcode=%s | type=%s | product_name=%r | brand=%r | search_result=%r",
+            "  [%d/%d] barcode=%s | type=%s | in_existence=%s | product_name=%r | brand=%r | description=%r",
             index,
             len(raw_items),
             normalized.data,
             normalized.type,
+            normalized.in_existence,
             normalized.product_name,
             normalized.brand,
-            normalized.search_result,
+            normalized.description,
         )
 
     recipe_suggestion = await arun_recipe_agent(normalized_items)

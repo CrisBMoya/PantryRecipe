@@ -16,6 +16,7 @@ import {
   loadStoredBarcodes,
   saveFrontProductPhoto,
   saveProductInfoForBarcode,
+  setStoredBarcodeExistence,
 } from '../utils/barcodeStorage';
 import {
   DEFAULT_SERVER_PORT,
@@ -57,6 +58,10 @@ export interface UseBarcodeScannerReturn {
   clearRecipeSuggestion: () => void;
   refreshStoredBarcodes: () => StoredBarcodeEntry[];
   removeStoredBarcode: (barcodeData: string) => StoredBarcodeEntry[];
+  setBarcodeExistence: (
+    barcodeData: string,
+    inExistence: boolean
+  ) => StoredBarcodeEntry | null;
   createManualProduct: (input: ManualProductInput) => StoredBarcodeEntry;
 }
 
@@ -118,12 +123,39 @@ export function useBarcodeScanner(
     []
   );
 
+  const setBarcodeExistence = useCallback(
+    (barcodeData: string, inExistence: boolean): StoredBarcodeEntry | null => {
+      const normalized = barcodeData.trim();
+      const { entry, entries } = setStoredBarcodeExistence(
+        normalized,
+        inExistence
+      );
+      setStoredBarcodes(entries);
+      if (entry) {
+        setScannedResult((prev) =>
+          prev && prev.data === normalized
+            ? {
+                ...prev,
+                in_existence: entry.in_existence,
+                productInfo: entry.productInfo,
+              }
+            : prev
+        );
+        console.log(
+          `[BarcodeScanner] Updated existence for ${normalized}: in_existence=${entry.in_existence}`
+        );
+      }
+      return entry;
+    },
+    []
+  );
+
   const createManualProduct = useCallback(
     (input: ManualProductInput): StoredBarcodeEntry => {
       const { entry, entries } = addManualProduct(input);
       setStoredBarcodes(entries);
       console.log(
-        `[BarcodeScanner] Added manual product (${entry.data}): ${entry.brand} - ${entry.product_name}`
+        `[BarcodeScanner] Added manual product (${entry.data}): ${entry.brand} - ${entry.product_name} (in_existence=${entry.in_existence})`
       );
       return entry;
     },
@@ -176,7 +208,10 @@ export function useBarcodeScanner(
           targetBarcodeData,
           serverBaseUrl
         );
-        saveProductInfoForBarcode(targetBarcodeData, productInfo);
+        const savedEntry = saveProductInfoForBarcode(
+          targetBarcodeData,
+          productInfo
+        );
         setStoredBarcodes(loadStoredBarcodes());
 
         setScannedResult((prev) => {
@@ -185,11 +220,16 @@ export function useBarcodeScanner(
           }
           const updated: ScannedBarcode = {
             ...prev,
+            in_existence: savedEntry?.in_existence ?? prev.in_existence ?? true,
             frontPhotoUri: targetUri,
             product_name: productInfo.product_name,
             brand: productInfo.brand,
+            description:
+              savedEntry?.description ??
+              productInfo.description ??
+              productInfo.search_result,
             search_result: productInfo.search_result,
-            productInfo,
+            productInfo: savedEntry?.productInfo ?? productInfo,
           };
           onScanned?.(updated);
           return updated;
@@ -346,16 +386,22 @@ export function useBarcodeScanner(
         const verifiedBarcode: ScannedBarcode = {
           ...baseBarcode,
           status,
+          in_existence: entry.in_existence,
           frontPhotoUri: entry.frontPhotoUri,
           product_name: entry.product_name ?? entry.productInfo?.product_name,
           brand: entry.brand ?? entry.productInfo?.brand,
+          description:
+            entry.description ??
+            entry.productInfo?.description ??
+            entry.search_result ??
+            entry.productInfo?.search_result,
           search_result:
             entry.search_result ?? entry.productInfo?.search_result,
           productInfo: entry.productInfo,
         };
         console.log(
-          `[BarcodeScanner] Code: ${verifiedBarcode.data} | Status: ${status.toUpperCase()} (${
-            status === 'new' ? 'New code saved to file' : 'Old code already in file'
+          `[BarcodeScanner] Code: ${verifiedBarcode.data} | Status: ${status.toUpperCase()} | in_existence=${entry.in_existence} (${
+            status === 'new' ? 'New code saved to file' : 'Old code already in file (in_existence set to true)'
           })`
         );
         setIsScanning(false);
@@ -390,6 +436,7 @@ export function useBarcodeScanner(
     clearRecipeSuggestion,
     refreshStoredBarcodes,
     removeStoredBarcode,
+    setBarcodeExistence,
     createManualProduct,
   };
 }

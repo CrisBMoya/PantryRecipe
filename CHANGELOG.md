@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.16.0] - 2026-11-24
+
+### Added
+- **Product Existence Boolean State (`src/types/barcode.ts`, `src/utils/barcodeStorage.ts`, `src/hooks/useBarcodeScanner.ts`, `src/components/BarcodeScannerView.tsx`, `server/app/agents/state.py`, `server/app/agents/nodes.py`, `server/main.py`):** Added a boolean `in_existence` field persisted in `scanned_barcodes.json` alongside `brand`, `product_name`, and `description`. Scanning a new barcode or re-scanning an existing (`old`) barcode automatically sets `in_existence: true`. Added `setStoredBarcodeExistence` / `setBarcodeExistence` and UI badges/toggle buttons on both the **Saved Products** list and the **Scanned Result** card so users can mark any specific product as not having existences (`in_existence: false`) or back in existence (`in_existence: true`).
+
 ## [0.15.0] - 2026-11-22
 
 ### Added

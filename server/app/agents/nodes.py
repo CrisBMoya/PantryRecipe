@@ -186,7 +186,9 @@ def web_search_node(state: AgentState) -> dict:
     updated_product_info = ProductInfo(
         product_name=product_name,
         brand=brand,
+        description=result_text,
         search_result=result_text,
+        in_existence=True,
     )
 
     return {
@@ -225,6 +227,7 @@ def format_pantry_items_prompt(items: list[ScannedBarcodeItem]) -> str:
         lines.append(
             f"\nItem {index}:\n"
             f"- Barcode: {item.data}\n"
+            f"- In Existence: {item.in_existence}\n"
             f"- Product Title: {product_name}\n"
             f"- Brand: {brand}\n"
             f"- Product Details / Web Search Result: {search_result}"

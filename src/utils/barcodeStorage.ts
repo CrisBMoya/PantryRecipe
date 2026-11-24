@@ -58,7 +58,12 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
       : typeof item.productInfo?.description === 'string' &&
           item.productInfo.description.trim()
         ? item.productInfo.description.trim()
-        : undefined;
+        : typeof item.search_result === 'string' && item.search_result.trim()
+          ? item.search_result.trim()
+          : typeof item.productInfo?.search_result === 'string' &&
+              item.productInfo.search_result.trim()
+            ? item.productInfo.search_result.trim()
+            : undefined;
 
   const searchResult =
     typeof item.search_result === 'string' && item.search_result.trim()
@@ -67,6 +72,13 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
           item.productInfo.search_result.trim()
         ? item.productInfo.search_result.trim()
         : description;
+
+  const inExistence =
+    typeof item.in_existence === 'boolean'
+      ? item.in_existence
+      : typeof item.productInfo?.in_existence === 'boolean'
+        ? item.productInfo.in_existence
+        : true;
 
   const productInfo: ProductInfo | undefined =
     productName !== undefined ||
@@ -78,11 +90,13 @@ function normalizeStoredEntry(item: StoredBarcodeEntry): StoredBarcodeEntry {
           brand: brand ?? '',
           ...(description !== undefined ? { description } : {}),
           ...(searchResult !== undefined ? { search_result: searchResult } : {}),
+          in_existence: inExistence,
         }
       : undefined;
 
   return {
     ...item,
+    in_existence: inExistence,
     ...(productName !== undefined ? { product_name: productName } : {}),
     ...(brand !== undefined ? { brand } : {}),
     ...(description !== undefined ? { description } : {}),
@@ -129,8 +143,8 @@ export function loadStoredBarcodes(): StoredBarcodeEntry[] {
 
 /**
  * Checks whether a scanned barcode is already present in the local file.
- * - If it already exists: marks status as 'old' and updates scan metadata.
- * - If it does not exist: saves it to the local file and marks status as 'new'.
+ * - If it already exists: marks status as 'old', sets `in_existence` to `true`, and updates scan metadata.
+ * - If it does not exist: saves it to the local file with `in_existence: true` and marks status as 'new'.
  */
 export function checkAndSaveBarcode(barcode: ScannedBarcode): {
   status: BarcodeOriginStatus;
@@ -151,10 +165,18 @@ export function checkAndSaveBarcode(barcode: ScannedBarcode): {
   if (existingIndex !== -1) {
     status = 'old';
     const existing = entries[existingIndex];
+    const updatedProductInfo: ProductInfo | undefined = existing.productInfo
+      ? {
+          ...existing.productInfo,
+          in_existence: true,
+        }
+      : undefined;
     targetEntry = {
       ...existing,
       lastScannedAt: barcode.scannedAt,
       scanCount: (existing.scanCount ?? 1) + 1,
+      in_existence: true,
+      ...(updatedProductInfo ? { productInfo: updatedProductInfo } : {}),
     };
     entries[existingIndex] = targetEntry;
   } else {
@@ -165,6 +187,7 @@ export function checkAndSaveBarcode(barcode: ScannedBarcode): {
       firstScannedAt: barcode.scannedAt,
       lastScannedAt: barcode.scannedAt,
       scanCount: 1,
+      in_existence: true,
     };
     entries.push(targetEntry);
   }
@@ -232,8 +255,8 @@ export function saveFrontProductPhoto(
 }
 
 /**
- * Updates the stored barcode entry with extracted ProductInfo (product_name and brand)
- * returned by the backend server.
+ * Updates the stored barcode entry with extracted ProductInfo (product_name, brand, description)
+ * returned by the backend server along with its existence state.
  */
 export function saveProductInfoForBarcode(
   barcodeData: string,
@@ -249,24 +272,46 @@ export function saveProductInfoForBarcode(
     return null;
   }
 
+  const existing = entries[existingIndex];
+  const inExistence =
+    typeof productInfo.in_existence === 'boolean'
+      ? productInfo.in_existence
+      : typeof existing.in_existence === 'boolean'
+        ? existing.in_existence
+        : true;
+
   const normalizedSearchResult =
     typeof productInfo.search_result === 'string' &&
     productInfo.search_result.trim()
       ? productInfo.search_result.trim()
       : undefined;
 
+  const normalizedDescription =
+    typeof productInfo.description === 'string' &&
+    productInfo.description.trim()
+      ? productInfo.description.trim()
+      : normalizedSearchResult ?? existing.description;
+
   const normalizedProductInfo: ProductInfo = {
     product_name: productInfo.product_name.trim(),
     brand: productInfo.brand.trim(),
+    ...(normalizedDescription !== undefined
+      ? { description: normalizedDescription }
+      : {}),
     ...(normalizedSearchResult !== undefined
       ? { search_result: normalizedSearchResult }
       : {}),
+    in_existence: inExistence,
   };
 
   const updatedEntry: StoredBarcodeEntry = {
-    ...entries[existingIndex],
+    ...existing,
+    in_existence: inExistence,
     product_name: normalizedProductInfo.product_name,
     brand: normalizedProductInfo.brand,
+    ...(normalizedDescription !== undefined
+      ? { description: normalizedDescription }
+      : {}),
     ...(normalizedSearchResult !== undefined
       ? { search_result: normalizedSearchResult }
       : {}),
@@ -276,6 +321,53 @@ export function saveProductInfoForBarcode(
   writeStoredBarcodes(entries);
 
   return updatedEntry;
+}
+
+/**
+ * Updates the boolean `in_existence` status of a specific stored product entry in `scanned_barcodes.json`.
+ * Returns the updated entry (if found) and the full list of stored entries.
+ */
+export function setStoredBarcodeExistence(
+  barcodeData: string,
+  inExistence: boolean
+): {
+  entry: StoredBarcodeEntry | null;
+  entries: StoredBarcodeEntry[];
+} {
+  const normalizedData = barcodeData.trim();
+  const entries = loadStoredBarcodes();
+  const existingIndex = entries.findIndex(
+    (entry) => entry.data === normalizedData
+  );
+
+  if (existingIndex === -1) {
+    return {
+      entry: null,
+      entries,
+    };
+  }
+
+  const existing = entries[existingIndex];
+  const updatedProductInfo: ProductInfo | undefined = existing.productInfo
+    ? {
+        ...existing.productInfo,
+        in_existence: inExistence,
+      }
+    : undefined;
+
+  const updatedEntry: StoredBarcodeEntry = {
+    ...existing,
+    in_existence: inExistence,
+    ...(updatedProductInfo ? { productInfo: updatedProductInfo } : {}),
+  };
+
+  entries[existingIndex] = updatedEntry;
+  writeStoredBarcodes(entries);
+
+  return {
+    entry: updatedEntry,
+    entries,
+  };
 }
 
 /**
@@ -307,7 +399,7 @@ export function deleteStoredBarcode(barcodeData: string): StoredBarcodeEntry[] {
 }
 
 /**
- * Adds a manually entered product (product_name, brand, description) to `scanned_barcodes.json`.
+ * Adds a manually entered product (product_name, brand, description, in_existence) to `scanned_barcodes.json`.
  * Returns the newly created stored entry and the updated list of all entries.
  */
 export function addManualProduct(input: ManualProductInput): {
@@ -319,6 +411,8 @@ export function addManualProduct(input: ManualProductInput): {
   const productName = input.product_name.trim();
   const brand = input.brand.trim();
   const description = input.description.trim();
+  const inExistence =
+    typeof input.in_existence === 'boolean' ? input.in_existence : true;
 
   let manualId = `MANUAL-${now}`;
   let suffix = 1;
@@ -331,6 +425,7 @@ export function addManualProduct(input: ManualProductInput): {
     product_name: productName,
     brand,
     ...(description ? { description, search_result: description } : {}),
+    in_existence: inExistence,
   };
 
   const newEntry: StoredBarcodeEntry = {
@@ -339,6 +434,7 @@ export function addManualProduct(input: ManualProductInput): {
     firstScannedAt: now,
     lastScannedAt: now,
     scanCount: 1,
+    in_existence: inExistence,
     product_name: productName,
     brand,
     ...(description ? { description, search_result: description } : {}),

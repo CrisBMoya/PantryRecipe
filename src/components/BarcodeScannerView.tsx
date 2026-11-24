@@ -84,6 +84,7 @@ export function BarcodeScannerView({
     sendStoredBarcodesToServer,
     refreshStoredBarcodes,
     removeStoredBarcode,
+    setBarcodeExistence,
     createManualProduct,
   } = useBarcodeScanner(config, onScanned);
 
@@ -232,13 +233,18 @@ export function BarcodeScannerView({
 
   const handleOpenSelectProductsModal = () => {
     const latest = refreshStoredBarcodes();
+    const inExistenceIds = latest
+      .filter((entry) => entry.in_existence !== false)
+      .map((entry) => entry.data);
     setSelectedBarcodeIds((prev) => {
       const validPrev = prev.filter((id) =>
         latest.some((entry) => entry.data === id)
       );
       return validPrev.length > 0
         ? validPrev
-        : latest.map((entry) => entry.data);
+        : inExistenceIds.length > 0
+          ? inExistenceIds
+          : latest.map((entry) => entry.data);
     });
     setIsSendOptionsModalVisible(false);
     setIsSelectProductsModalVisible(true);
@@ -256,8 +262,23 @@ export function BarcodeScannerView({
     setSelectedBarcodeIds(storedBarcodes.map((entry) => entry.data));
   };
 
+  const handleSelectInExistenceProducts = () => {
+    setSelectedBarcodeIds(
+      storedBarcodes
+        .filter((entry) => entry.in_existence !== false)
+        .map((entry) => entry.data)
+    );
+  };
+
   const handleClearProductSelection = () => {
     setSelectedBarcodeIds([]);
+  };
+
+  const handleToggleBarcodeExistence = (
+    barcodeData: string,
+    currentInExistence: boolean
+  ) => {
+    setBarcodeExistence(barcodeData, !currentInExistence);
   };
 
   const handleSendSelectedProducts = async () => {
@@ -336,9 +357,15 @@ export function BarcodeScannerView({
       item.search_result ??
       item.productInfo?.search_result;
     const isManual = item.type === 'manual';
+    const inExistence = item.in_existence !== false;
 
     return (
-      <View style={styles.savedItemCard}>
+      <View
+        style={[
+          styles.savedItemCard,
+          !inExistence ? styles.savedItemCardOutOfExistence : null,
+        ]}
+      >
         <View style={styles.savedItemTopRow}>
           {item.frontPhotoUri ? (
             <Image
@@ -370,6 +397,27 @@ export function BarcodeScannerView({
                   {item.type.toUpperCase()}
                 </Text>
               </View>
+              <View
+                style={[
+                  styles.existenceBadge,
+                  inExistence
+                    ? styles.existenceBadgeTrue
+                    : styles.existenceBadgeFalse,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.existenceBadgeText,
+                    inExistence
+                      ? styles.existenceBadgeTextTrue
+                      : styles.existenceBadgeTextFalse,
+                  ]}
+                >
+                  {inExistence
+                    ? 'IN EXISTENCE (TRUE)'
+                    : 'NO EXISTENCE (FALSE)'}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -377,7 +425,7 @@ export function BarcodeScannerView({
         {descriptionOrSearch ? (
           <View style={styles.savedItemSearchSection}>
             <Text style={styles.savedItemSearchLabel}>
-              {isManual ? 'PRODUCT DESCRIPTION' : 'WEB SEARCH DETAILS'}
+              {isManual ? 'PRODUCT DESCRIPTION' : 'DESCRIPTION / WEB DETAILS'}
             </Text>
             <Text style={styles.savedItemSearchText} numberOfLines={4}>
               {descriptionOrSearch}
@@ -389,13 +437,39 @@ export function BarcodeScannerView({
           <Text style={styles.savedItemMetaText}>
             {isManual ? 'Added manually' : `Scanned ${item.scanCount ?? 1}x`}
           </Text>
-          <TouchableOpacity
-            style={styles.deleteItemButton}
-            onPress={() => handleDeleteBarcode(item.data)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.deleteItemButtonText}>Delete</Text>
-          </TouchableOpacity>
+          <View style={styles.savedItemActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.existenceToggleButton,
+                inExistence
+                  ? styles.existenceToggleSetFalseButton
+                  : styles.existenceToggleSetTrueButton,
+              ]}
+              onPress={() => handleToggleBarcodeExistence(item.data, inExistence)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.existenceToggleButtonText,
+                  inExistence
+                    ? styles.existenceToggleSetFalseText
+                    : styles.existenceToggleSetTrueText,
+                ]}
+              >
+                {inExistence
+                  ? 'Mark No Existence (False)'
+                  : 'Mark In Existence (True)'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteItemButton}
+              onPress={() => handleDeleteBarcode(item.data)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.deleteItemButtonText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -413,6 +487,7 @@ export function BarcodeScannerView({
       item.productInfo?.search_result;
     const isManual = item.type === 'manual';
     const isSelected = selectedBarcodeIds.includes(item.data);
+    const inExistence = item.in_existence !== false;
 
     return (
       <TouchableOpacity
@@ -463,6 +538,25 @@ export function BarcodeScannerView({
             <View style={styles.savedItemTypeBadge}>
               <Text style={styles.savedItemTypeText}>
                 {item.type.toUpperCase()}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.existenceBadge,
+                inExistence
+                  ? styles.existenceBadgeTrue
+                  : styles.existenceBadgeFalse,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.existenceBadgeText,
+                  inExistence
+                    ? styles.existenceBadgeTextTrue
+                    : styles.existenceBadgeTextFalse,
+                ]}
+              >
+                {inExistence ? 'IN EXISTENCE' : 'NO EXISTENCE'}
               </Text>
             </View>
           </View>
@@ -557,27 +651,52 @@ export function BarcodeScannerView({
                 <Text style={styles.resultLabel}>
                   VERIFIED BARCODE ({scannedResult.type.toUpperCase()})
                 </Text>
-                {scannedResult.status && (
+                <View style={styles.resultHeaderBadgesRow}>
+                  {scannedResult.status && (
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        scannedResult.status === 'new'
+                          ? styles.statusBadgeNew
+                          : styles.statusBadgeOld,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          scannedResult.status === 'new'
+                            ? styles.statusBadgeTextNew
+                            : styles.statusBadgeTextOld,
+                        ]}
+                      >
+                        {scannedResult.status === 'new'
+                          ? 'NEW CODE'
+                          : 'OLD CODE'}
+                      </Text>
+                    </View>
+                  )}
                   <View
                     style={[
-                      styles.statusBadge,
-                      scannedResult.status === 'new'
-                        ? styles.statusBadgeNew
-                        : styles.statusBadgeOld,
+                      styles.existenceBadge,
+                      scannedResult.in_existence !== false
+                        ? styles.existenceBadgeTrue
+                        : styles.existenceBadgeFalse,
                     ]}
                   >
                     <Text
                       style={[
-                        styles.statusBadgeText,
-                        scannedResult.status === 'new'
-                          ? styles.statusBadgeTextNew
-                          : styles.statusBadgeTextOld,
+                        styles.existenceBadgeText,
+                        scannedResult.in_existence !== false
+                          ? styles.existenceBadgeTextTrue
+                          : styles.existenceBadgeTextFalse,
                       ]}
                     >
-                      {scannedResult.status === 'new' ? 'NEW CODE' : 'OLD CODE'}
+                      {scannedResult.in_existence !== false
+                        ? 'EXISTENCE: TRUE'
+                        : 'EXISTENCE: FALSE'}
                     </Text>
                   </View>
-                )}
+                </View>
               </View>
               <Text style={styles.resultData} selectable>
                 {scannedResult.data}
@@ -644,9 +763,9 @@ export function BarcodeScannerView({
                         ? isUploadingPhoto
                           ? 'New code — sending front product photo to server...'
                           : hasScannedProductInfo
-                            ? 'New code — product details extracted from server.'
-                            : 'New code — barcode and front product photo saved.'
-                        : 'Old code — already exists in local file.'}
+                            ? 'New code — product details extracted from server (Existence: True).'
+                            : 'New code — barcode and front product photo saved (Existence: True).'
+                        : 'Old code — registered with existence True in local file.'}
                     </Text>
                   )}
 
@@ -746,6 +865,37 @@ export function BarcodeScannerView({
                       activeOpacity={0.8}
                     >
                       <Text style={styles.primaryButtonText}>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.resultExistenceButton,
+                        scannedResult.in_existence !== false
+                          ? styles.existenceToggleSetFalseButton
+                          : styles.existenceToggleSetTrueButton,
+                        isUploadingPhoto ? styles.buttonDisabled : null,
+                      ]}
+                      onPress={() =>
+                        handleToggleBarcodeExistence(
+                          scannedResult.data,
+                          scannedResult.in_existence !== false
+                        )
+                      }
+                      disabled={isUploadingPhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.resultExistenceButtonText,
+                          scannedResult.in_existence !== false
+                            ? styles.existenceToggleSetFalseText
+                            : styles.existenceToggleSetTrueText,
+                        ]}
+                      >
+                        {scannedResult.in_existence !== false
+                          ? 'Mark Product as No Existence (False)'
+                          : 'Mark Product as In Existence (True)'}
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1066,6 +1216,22 @@ export function BarcodeScannerView({
               <View style={styles.selectionQuickButtonsRow}>
                 <TouchableOpacity
                   style={styles.selectionQuickButton}
+                  onPress={handleSelectInExistenceProducts}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.selectionQuickButtonText}>
+                    In Existence (
+                    {
+                      storedBarcodes.filter(
+                        (entry) => entry.in_existence !== false
+                      ).length
+                    }
+                    )
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.selectionQuickButton}
                   onPress={handleSelectAllProducts}
                   activeOpacity={0.8}
                 >
@@ -1080,7 +1246,7 @@ export function BarcodeScannerView({
                   activeOpacity={0.8}
                 >
                   <Text style={styles.selectionQuickButtonText}>
-                    Clear Selection
+                    Clear
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1402,6 +1568,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
     gap: 8,
+  },
+  resultHeaderBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   resultLabel: {
     color: '#94A3B8',
@@ -1861,6 +2033,10 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     gap: 12,
   },
+  savedItemCardOutOfExistence: {
+    borderColor: '#64748B',
+    opacity: 0.85,
+  },
   savedItemTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1928,6 +2104,31 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  existenceBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  existenceBadgeTrue: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderColor: '#22C55E',
+  },
+  existenceBadgeFalse: {
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderColor: '#EF4444',
+  },
+  existenceBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  existenceBadgeTextTrue: {
+    color: '#4ADE80',
+  },
+  existenceBadgeTextFalse: {
+    color: '#FCA5A5',
+  },
   savedItemSearchSection: {
     backgroundColor: '#0F172A',
     borderRadius: 10,
@@ -1951,6 +2152,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: '#334155',
     paddingTop: 10,
@@ -1959,6 +2162,48 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '500',
+  },
+  savedItemActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  existenceToggleButton: {
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  existenceToggleSetFalseButton: {
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderColor: '#F59E0B',
+  },
+  existenceToggleSetTrueButton: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderColor: '#22C55E',
+  },
+  existenceToggleButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  existenceToggleSetFalseText: {
+    color: '#FCD34D',
+  },
+  existenceToggleSetTrueText: {
+    color: '#4ADE80',
+  },
+  resultExistenceButton: {
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  resultExistenceButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   deleteItemButton: {
     backgroundColor: 'rgba(239, 68, 68, 0.16)',
